@@ -1,0 +1,27 @@
+How git uses watchman
+---------------------
+
+Git status (and some other commands) have to determine which files
+have changed between the working copy and the index.  Ordinarily, this
+requires checking every file in the working directory.  But if you
+have watchman (https://github.com/facebook/watchman) installed, git
+can cache the state of the working directory and use watchman to track
+file changes, making commands like git status faster.
+
+set core.usewatchman = true to use watchman.
+You can also set
+core.watchmansynctimeout = [number of milliseconds]
+to change watchman's sync timeout; see the watchman docs for details
+on this.  You should only change this if you see watchman timeout
+error messages.
+
+Internals
+---------
+
+The filesystem cache stores information about every file in the
+working tree.  In almost every case where git calls lstat or
+opendir/readdir, the modified file cache can be consulted instead.
+
+The file system cache is stored on disk in .git/fs_cache.  It is
+stored very similarly to the index, except without path prefix
+compression.

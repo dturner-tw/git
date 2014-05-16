@@ -8,6 +8,7 @@
  *		 Junio Hamano, 2005-2006
  */
 #include "cache.h"
+#include "fs_cache.h"
 #include "dir.h"
 #include "refs.h"
 #include "wildmatch.h"
@@ -33,8 +34,8 @@ enum path_treatment {
 
 static enum path_treatment read_directory_recursive(struct dir_struct *dir,
 	const char *path, int len,
-	int check_only, const struct path_simplify *simplify);
-static int get_dtype(struct dirent *de, const char *path, int len);
+	int check_only, const struct path_simplify *simplify,
+	struct fsc_entry *fe);
 
 /* helper string functions with support for the ignore_case flag */
 int strcmp_icase(const char *a, const char *b)
@@ -536,7 +537,7 @@ int add_excludes_from_file_to_list(const char *fname,
 	size_t size = 0;
 	char *buf, *entry;
 
-	fd = open(fname, O_RDONLY);
+	fd = fs_cache_open(the_index.fs_cache, fname, O_RDONLY);
 	if (fd < 0 || fstat(fd, &st) < 0) {
 		if (errno != ENOENT)
 			warn_on_inaccessible(fname);
@@ -597,6 +598,8 @@ struct exclude_list *add_exclude_list(struct dir_struct *dir,
 	el = &group->el[group->nr++];
 	memset(el, 0, sizeof(*el));
 	el->src = src;
+	if (group_type == EXC_FILE)
+		dir->flags &= ~DIR_STD_EXCLUDES;
 	return el;
 }
 
@@ -609,6 +612,7 @@ void add_excludes_from_file(struct dir_struct *dir, const char *fname)
 	el = add_exclude_list(dir, EXC_FILE, fname);
 	if (add_excludes_from_file_to_list(fname, "", 0, el, 0) < 0)
 		die("cannot use %s as an exclude file", fname);
+	dir->flags &= ~DIR_STD_EXCLUDES;
 }
 
 int match_basename(const char *basename, int basenamelen,
@@ -763,7 +767,9 @@ static struct exclude *last_exclude_matching_from_lists(struct dir_struct *dir,
 	int i, j;
 	struct exclude_list_group *group;
 	struct exclude *exclude;
-	for (i = EXC_CMDL; i <= EXC_FILE; i++) {
+	int last = dir->flags & DIR_EXCLUDE_CMDL_ONLY ? EXC_CMDL : EXC_FILE;
+
+	for (i = EXC_CMDL; i <= last; i++) {
 		group = &dir->exclude_list_group[i];
 		for (j = group->nr - 1; j >= 0; j--) {
 			exclude = last_exclude_matching_from_list(
@@ -852,6 +858,7 @@ static void prep_exclude(struct dir_struct *dir, const char *base, int baselen)
 
 		/* Try to read per-directory file unless path is too long */
 		if (dir->exclude_per_dir &&
+		    !(dir->flags & DIR_EXCLUDE_CMDL_ONLY) &&
 		    stk->baselen + strlen(dir->exclude_per_dir) < PATH_MAX) {
 			strcpy(dir->basebuf + stk->baselen,
 					dir->exclude_per_dir);
@@ -907,6 +914,17 @@ int is_excluded(struct dir_struct *dir, const char *pathname, int *dtype_p)
 		last_exclude_matching(dir, pathname, dtype_p);
 	if (exclude)
 		return exclude->flags & EXC_FLAG_NEGATIVE ? 0 : 1;
+	return 0;
+}
+
+static int fs_cache_is_excluded(struct dir_struct *dir, const char *pathname, int *dtype_p, struct fsc_entry *fe)
+{
+	struct exclude *exclude;
+	exclude = last_exclude_matching(dir, pathname, dtype_p);
+	if (exclude)
+		return exclude->flags & EXC_FLAG_NEGATIVE ? 0 : 1;
+	if (dir->flags & DIR_STD_EXCLUDES && fe)
+		return fe_excluded(fe);
 	return 0;
 }
 
@@ -1047,7 +1065,7 @@ static enum exist_status directory_exists_in_index(const char *dirname, int len)
  */
 static enum path_treatment treat_directory(struct dir_struct *dir,
 	const char *dirname, int len, int exclude,
-	const struct path_simplify *simplify)
+	const struct path_simplify *simplify, struct fsc_entry *fe)
 {
 	/* The "len-1" is to strip the final '/' */
 	switch (directory_exists_in_index(dirname, len-1)) {
@@ -1073,7 +1091,7 @@ static enum path_treatment treat_directory(struct dir_struct *dir,
 	if (!(dir->flags & DIR_HIDE_EMPTY_DIRECTORIES))
 		return exclude ? path_excluded : path_untracked;
 
-	return read_directory_recursive(dir, dirname, len, 1, simplify);
+	return read_directory_recursive(dir, dirname, len, 1, simplify, fe);
 }
 
 /*
@@ -1167,7 +1185,7 @@ static int get_index_dtype(const char *path, int len)
 	return DT_UNKNOWN;
 }
 
-static int get_dtype(struct dirent *de, const char *path, int len)
+int get_dtype(struct dirent *de, const char *path, int len)
 {
 	int dtype = de ? DTYPE(de) : DT_UNKNOWN;
 	struct stat st;
@@ -1191,7 +1209,8 @@ static int get_dtype(struct dirent *de, const char *path, int len)
 static enum path_treatment treat_one_path(struct dir_struct *dir,
 					  struct strbuf *path,
 					  const struct path_simplify *simplify,
-					  int dtype, struct dirent *de)
+					  int dtype, struct dirent *de,
+					  struct fsc_entry *fe)
 {
 	int exclude;
 	int has_path_in_index = !!cache_file_exists(path->buf, path->len, ignore_case);
@@ -1227,7 +1246,7 @@ static enum path_treatment treat_one_path(struct dir_struct *dir,
 	    (directory_exists_in_index(path->buf, path->len) == index_nonexistent))
 		return path_none;
 
-	exclude = is_excluded(dir, path->buf, &dtype);
+	exclude = fs_cache_is_excluded(dir, path->buf, &dtype, fe);
 
 	/*
 	 * Excluded? If we don't explicitly want to show
@@ -1242,7 +1261,7 @@ static enum path_treatment treat_one_path(struct dir_struct *dir,
 	case DT_DIR:
 		strbuf_addch(path, '/');
 		return treat_directory(dir, path->buf, path->len, exclude,
-			simplify);
+			simplify, fe);
 	case DT_REG:
 	case DT_LNK:
 		return exclude ? path_excluded : path_untracked;
@@ -1253,7 +1272,8 @@ static enum path_treatment treat_path(struct dir_struct *dir,
 				      struct dirent *de,
 				      struct strbuf *path,
 				      int baselen,
-				      const struct path_simplify *simplify)
+				      const struct path_simplify *simplify,
+				      struct fsc_entry *fe)
 {
 	int dtype;
 
@@ -1265,7 +1285,59 @@ static enum path_treatment treat_path(struct dir_struct *dir,
 		return path_none;
 
 	dtype = DTYPE(de);
-	return treat_one_path(dir, path, simplify, dtype, de);
+	return treat_one_path(dir, path, simplify, dtype, de, fe);
+}
+
+static int handle(struct dir_struct *dir, const char *base, int baselen,
+		  int check_only, const struct path_simplify *simplify,
+		  struct dirent *de, enum path_treatment *dir_state,
+		  struct strbuf *path, struct fsc_entry *fe)
+{
+	enum path_treatment state, subdir_state;
+
+	/* check how the file or directory should be treated */
+	state = treat_path(dir, de, path, baselen, simplify, fe);
+
+	if (state > *dir_state)
+		*dir_state = state;
+
+	/* recurse into subdir if instructed by treat_path */
+	if (state == path_recurse) {
+		subdir_state = read_directory_recursive(dir, path->buf,
+			path->len, check_only, simplify, fe);
+		if (subdir_state > *dir_state)
+			*dir_state = subdir_state;
+	}
+
+	if (check_only) {
+		/* abort early if maximum state has been reached */
+		if (*dir_state == path_untracked)
+			return 1;
+		/* skip the dir_add_* part */
+		return 0;
+	}
+
+	/* add the path to the appropriate result list */
+	switch (state) {
+	case path_excluded:
+		if (dir->flags & DIR_SHOW_IGNORED)
+			dir_add_name(dir, path->buf, path->len);
+		else if ((dir->flags & DIR_SHOW_IGNORED_TOO) ||
+			 ((dir->flags & DIR_COLLECT_IGNORED) &&
+			  exclude_matches_pathspec(path->buf, path->len,
+				simplify)))
+			dir_add_ignored(dir, path->buf, path->len);
+		break;
+
+	case path_untracked:
+		if (!(dir->flags & DIR_SHOW_IGNORED))
+			dir_add_name(dir, path->buf, path->len);
+		break;
+
+	default:
+		break;
+	}
+	return 0;
 }
 
 /*
@@ -1282,63 +1354,44 @@ static enum path_treatment treat_path(struct dir_struct *dir,
 static enum path_treatment read_directory_recursive(struct dir_struct *dir,
 				    const char *base, int baselen,
 				    int check_only,
-				    const struct path_simplify *simplify)
+				    const struct path_simplify *simplify,
+				    struct fsc_entry *parent)
 {
 	DIR *fdir;
-	enum path_treatment state, subdir_state, dir_state = path_none;
-	struct dirent *de;
+	enum path_treatment dir_state = path_none;
 	struct strbuf path = STRBUF_INIT;
 
 	strbuf_add(&path, base, baselen);
 
-	fdir = opendir(path.len ? path.buf : ".");
-	if (!fdir)
-		goto out;
+	if (the_index.fs_cache) {
+		struct fsc_entry *fe;
 
-	while ((de = readdir(fdir)) != NULL) {
-		/* check how the file or directory should be treated */
-		state = treat_path(dir, de, &path, baselen, simplify);
-		if (state > dir_state)
-			dir_state = state;
+		if (!parent)
+			goto out;
 
-		/* recurse into subdir if instructed by treat_path */
-		if (state == path_recurse) {
-			subdir_state = read_directory_recursive(dir, path.buf,
-				path.len, check_only, simplify);
-			if (subdir_state > dir_state)
-				dir_state = subdir_state;
-		}
-
-		if (check_only) {
-			/* abort early if maximum state has been reached */
-			if (dir_state == path_untracked)
+		for (fe = parent->first_child; fe; fe = fe->next_sibling) {
+			struct dirent de;
+			if (fe_deleted(fe))
+				continue;
+			de.d_ino = -1;
+			de.d_type = fe_dtype(fe);
+			strcpy(de.d_name, basename(fe->path));
+			if (handle(dir, base, baselen, check_only, simplify, &de, &dir_state, &path, fe))
 				break;
-			/* skip the dir_add_* part */
-			continue;
 		}
+	} else {
+		struct dirent *de;
+		fdir = opendir(path.len ? path.buf : ".");
+		if (!fdir)
+			goto out;
 
-		/* add the path to the appropriate result list */
-		switch (state) {
-		case path_excluded:
-			if (dir->flags & DIR_SHOW_IGNORED)
-				dir_add_name(dir, path.buf, path.len);
-			else if ((dir->flags & DIR_SHOW_IGNORED_TOO) ||
-				((dir->flags & DIR_COLLECT_IGNORED) &&
-				exclude_matches_pathspec(path.buf, path.len,
-					simplify)))
-				dir_add_ignored(dir, path.buf, path.len);
-			break;
-
-		case path_untracked:
-			if (!(dir->flags & DIR_SHOW_IGNORED))
-				dir_add_name(dir, path.buf, path.len);
-			break;
-
-		default:
-			break;
+		while ((de = readdir(fdir)) != NULL) {
+			if (handle(dir, base, baselen, check_only, simplify, de, &dir_state, &path, NULL))
+				break;
 		}
+		closedir(fdir);
 	}
-	closedir(fdir);
+
  out:
 	strbuf_release(&path);
 
@@ -1383,7 +1436,8 @@ static void free_simplify(struct path_simplify *simplify)
 
 static int treat_leading_path(struct dir_struct *dir,
 			      const char *path, int len,
-			      const struct path_simplify *simplify)
+			      const struct path_simplify *simplify,
+			      struct fsc_entry *fe)
 {
 	struct strbuf sb = STRBUF_INIT;
 	int baselen, rc = 0;
@@ -1410,7 +1464,7 @@ static int treat_leading_path(struct dir_struct *dir,
 		if (simplify_away(sb.buf, sb.len, simplify))
 			break;
 		if (treat_one_path(dir, &sb, simplify,
-				   DT_DIR, NULL) == path_none)
+				   DT_DIR, NULL, fe) == path_none)
 			break; /* do not recurse into it */
 		if (len <= baselen) {
 			rc = 1;
@@ -1422,9 +1476,12 @@ static int treat_leading_path(struct dir_struct *dir,
 	return rc;
 }
 
+
 int read_directory(struct dir_struct *dir, const char *path, int len, const struct pathspec *pathspec)
 {
 	struct path_simplify *simplify;
+	int saved_flags = dir->flags;
+	struct fsc_entry *fe = NULL;
 
 	/*
 	 * Check out create_simplify()
@@ -1448,11 +1505,32 @@ int read_directory(struct dir_struct *dir, const char *path, int len, const stru
 	 * create_simplify().
 	 */
 	simplify = create_simplify(pathspec ? pathspec->_raw : NULL);
-	if (!len || treat_leading_path(dir, path, len, simplify))
-		read_directory_recursive(dir, path, len, 0, simplify);
+
+	/*
+	  Check for standard excludes.
+	  Standard excludes means: exclude_per_dir
+	 */
+	if (!dir->exclude_per_dir || strcmp(dir->exclude_per_dir, ".gitignore"))
+		dir->flags &= ~DIR_STD_EXCLUDES;
+
+	if (the_index.fs_cache && dir->flags & DIR_STD_EXCLUDES) {
+		dir->flags |= DIR_EXCLUDE_CMDL_ONLY;
+	}
+
+	if (the_index.fs_cache) {
+		int len_no_slash = len;
+		if (len && path[len - 1] == '/')
+			len_no_slash --;
+		fe = fs_cache_file_exists(the_index.fs_cache, path, len_no_slash);
+	}
+
+	if (!len || treat_leading_path(dir, path, len, simplify, fe)) {
+		read_directory_recursive(dir, path, len, 0, simplify, fe);
+	}
 	free_simplify(simplify);
 	qsort(dir->entries, dir->nr, sizeof(struct dir_entry *), cmp_name);
 	qsort(dir->ignored, dir->ignored_nr, sizeof(struct dir_entry *), cmp_name);
+	dir->flags = saved_flags;
 	return dir->nr;
 }
 
@@ -1608,6 +1686,7 @@ void setup_standard_excludes(struct dir_struct *dir)
 {
 	const char *path;
 	char *xdg_path;
+	int previously_empty;
 
 	dir->exclude_per_dir = ".gitignore";
 	path = git_path("info/exclude");
@@ -1615,10 +1694,13 @@ void setup_standard_excludes(struct dir_struct *dir)
 		home_config_paths(NULL, &xdg_path, "ignore");
 		excludes_file = xdg_path;
 	}
+	previously_empty = dir->exclude_list_group[EXC_FILE].nr == 0;
 	if (!access_or_warn(path, R_OK, 0))
 		add_excludes_from_file(dir, path);
 	if (excludes_file && !access_or_warn(excludes_file, R_OK, 0))
 		add_excludes_from_file(dir, excludes_file);
+	if (previously_empty)
+		dir->flags |= DIR_STD_EXCLUDES;
 }
 
 int remove_path(const char *name)

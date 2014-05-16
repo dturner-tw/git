@@ -32,8 +32,10 @@ Git index format
 
      Extension data
 
-   - 160-bit SHA-1 over the content of the index file before this
-     checksum.
+   - For versions before 5, a 160-bit SHA-1 over the content of the
+     index file before this checksum.  For version 5, a 128-bit VMAC
+     hash (keyed with "abcdefghijklmnop") over same, followed by 4
+     bytes of zeros.
 
 == Index entry
 

@@ -7,24 +7,112 @@
 #define FNV32_BASE ((unsigned int) 0x811c9dc5)
 #define FNV32_PRIME ((unsigned int) 0x01000193)
 
-unsigned int strhash(const char *str)
+#ifndef NO_SSE
+#include <smmintrin.h>
+
+#define BLOCK_SIZE 16
+
+#ifdef __clang__
+typedef int v4si  __attribute__((ext_vector_type(4)));
+#define __v4si v4si
+#endif
+
+static const __v4si FNV32_BASE_4 = {FNV32_BASE, FNV32_BASE, FNV32_BASE, FNV32_BASE};
+static const __v4si FNV32_PRIME_4 = {FNV32_PRIME, FNV32_PRIME, FNV32_PRIME, FNV32_PRIME};
+static const __v4si CASE_MASK = {~0x20202020,~0x20202020,~0x20202020,~0x20202020};
+
+static inline __v4si hash_one_block(__v4si hash, __v4si data)
 {
-	unsigned int c, hash = FNV32_BASE;
-	while ((c = (unsigned char) *str++))
-		hash = (hash * FNV32_PRIME) ^ c;
+	__v4si data_lshift, data_rshift;
+	data_lshift = (__v4si)_mm_slli_epi32((__m128i)data, 16);
+	data_rshift = (__v4si)_mm_srai_epi32((__m128i)data, 16);
+	hash = (hash * FNV32_PRIME_4) ^ data;
+	data = data_lshift | data_rshift;
+	hash = (hash * FNV32_PRIME_4) ^ data;
+
 	return hash;
 }
 
-unsigned int strihash(const char *str)
-{
-	unsigned int c, hash = FNV32_BASE;
-	while ((c = (unsigned char) *str++)) {
-		if (c >= 'a' && c <= 'z')
-			c -= 'a' - 'A';
-		hash = (hash * FNV32_PRIME) ^ c;
+__v4si read_partial_block(const char *buf, int remainder) {
+	__v4si data = {0};
+	uint32_t bottom = 0;
+	int i = 0;
+
+	if (remainder & 8) {
+		data = (__v4si) _mm_loadl_epi64((__v2di*)(buf));
+		i += 8;
+		_mm_slli_si128((__m128i) data, 8);
 	}
-	return hash;
+	if (remainder & 4) {
+		uint32_t dword = (*(uint32_t *)(buf + i));
+		data = (__v4si)_mm_insert_epi32((__m128i)data, dword, 2);
+		i += 4;
+	}
+	if (remainder & 2) {
+		bottom = ((uint32_t)(*(uint16_t *)(buf + i))) << 8;
+		i += 2;
+	}
+	if (remainder & 1) {
+		bottom |= buf[i];
+	}
+	return (__v4si)_mm_insert_epi32((__m128i)data, bottom, 3);
 }
+
+unsigned int memhash(const void *bufp, size_t len)
+{
+	const char *buf = bufp;
+	__v4si hash = FNV32_BASE_4;
+	__v4si data;
+	int i;
+	int full_blocks = (len / BLOCK_SIZE);
+	int block_aligned_size = full_blocks * BLOCK_SIZE;
+	int remainder = len - block_aligned_size;
+
+	for (i = 0; i < block_aligned_size; i += BLOCK_SIZE) {
+		data = (__v4si)_mm_lddqu_si128((__m128i *)(buf + i));
+		hash = hash_one_block(hash, data);
+	}
+
+	if (remainder) {
+		data = read_partial_block(buf + i, remainder);
+		hash = hash_one_block(hash, data);
+	}
+
+	return _mm_extract_epi32((__m128i)hash, 0) ^
+		_mm_extract_epi32((__m128i)hash, 1) ^
+		_mm_extract_epi32((__m128i)hash, 2) ^
+		_mm_extract_epi32((__m128i)hash, 3);
+}
+
+unsigned int memihash(const void *bufp, size_t len)
+{
+	const char *buf = bufp;
+	__v4si hash = FNV32_BASE_4;
+	__v4si data;
+	int i;
+	int full_blocks = (len / BLOCK_SIZE);
+	int block_aligned_size = full_blocks * BLOCK_SIZE;
+	int remainder = len - block_aligned_size;
+
+	for (i = 0; i < block_aligned_size; i += BLOCK_SIZE) {
+		data = (__v4si)_mm_lddqu_si128((__m128i *)(buf + i));
+		data &= CASE_MASK;
+		hash = hash_one_block(hash, data);
+	}
+
+	if (remainder) {
+		data = read_partial_block(buf + i, remainder);
+		data &= CASE_MASK;
+		hash = hash_one_block(hash, data);
+	}
+
+	return _mm_extract_epi32((__m128i)hash, 0) ^
+		_mm_extract_epi32((__m128i)hash, 1) ^
+		_mm_extract_epi32((__m128i)hash, 2) ^
+		_mm_extract_epi32((__m128i)hash, 3);
+}
+
+#else
 
 unsigned int memhash(const void *buf, size_t len)
 {
@@ -49,6 +137,7 @@ unsigned int memihash(const void *buf, size_t len)
 	}
 	return hash;
 }
+#endif
 
 #define HASHMAP_INITIAL_SIZE 64
 /* grow / shrink by 2^2 */

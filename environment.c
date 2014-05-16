@@ -73,6 +73,10 @@ char comment_line_char = '#';
 /* Parallel index stat data preload? */
 int core_preload_index = 0;
 
+/* Use Watchman for faster status queries */
+int core_use_watchman = 0;
+int core_watchman_sync_timeout = 300;
+
 /* This is set by setup_git_dir_gently() and/or git_default_config() */
 char *git_work_tree_cfg;
 static char *work_tree;
@@ -81,7 +85,8 @@ static const char *namespace;
 static size_t namespace_len;
 
 static const char *git_dir;
-static char *git_object_dir, *git_index_file, *git_graft_file;
+static int fs_cache_file_relative;
+static char *git_object_dir, *git_index_file, *git_graft_file, *git_fs_cache_file;
 
 /*
  * Repository-local GIT_* environment variables; see cache.h for details.
@@ -142,6 +147,12 @@ static void setup_git_env(void)
 	if (!git_index_file) {
 		git_index_file = xmalloc(strlen(git_dir) + 7);
 		sprintf(git_index_file, "%s/index", git_dir);
+	}
+	git_fs_cache_file = getenv(FS_CACHE_ENVIRONMENT);
+	if (!git_fs_cache_file) {
+		git_fs_cache_file = xmalloc(strlen(git_dir) + 10);
+		sprintf(git_fs_cache_file, "%s/fs_cache", git_dir);
+		fs_cache_file_relative = 1;
 	}
 	git_graft_file = getenv(GRAFT_ENVIRONMENT);
 	if (!git_graft_file)
@@ -264,6 +275,19 @@ char *get_graft_file(void)
 	if (!git_graft_file)
 		setup_git_env();
 	return git_graft_file;
+}
+
+char *get_fs_cache_file(void)
+{
+	if (!git_fs_cache_file)
+		setup_git_env();
+	if (fs_cache_file_relative) {
+		char *abs_fs_cache_file = strdup(real_path(git_fs_cache_file));
+		free(git_fs_cache_file);
+		git_fs_cache_file = abs_fs_cache_file;
+		fs_cache_file_relative = 0;
+	}
+	return git_fs_cache_file;
 }
 
 int set_git_dir(const char *path)

@@ -417,6 +417,7 @@ TCLTK_PATH = wish
 XGETTEXT = xgettext
 MSGFMT = msgfmt
 PTHREAD_LIBS = -lpthread
+WATCHMAN_LIBS = -lwatchman
 PTHREAD_CFLAGS =
 GCOV = gcov
 
@@ -679,12 +680,14 @@ LIB_H += ewah/ewok.h
 LIB_H += ewah/ewok_rlw.h
 LIB_H += fetch-pack.h
 LIB_H += fmt-merge-msg.h
+LIB_H += fs_cache.h
 LIB_H += fsck.h
 LIB_H += gettext.h
 LIB_H += git-compat-util.h
 LIB_H += gpg-interface.h
 LIB_H += graph.h
 LIB_H += grep.h
+LIB_H += hash-io.h
 LIB_H += hashmap.h
 LIB_H += help.h
 LIB_H += http.h
@@ -723,6 +726,7 @@ LIB_H += remote.h
 LIB_H += rerere.h
 LIB_H += resolve-undo.h
 LIB_H += revision.h
+LIB_H += rijndael-alg-fst.h
 LIB_H += run-command.h
 LIB_H += send-pack.h
 LIB_H += sequencer.h
@@ -753,6 +757,7 @@ LIB_H += vcs-svn/repo_tree.h
 LIB_H += vcs-svn/sliding_window.h
 LIB_H += vcs-svn/svndiff.h
 LIB_H += vcs-svn/svndump.h
+LIB_H += vmac.h
 LIB_H += walker.h
 LIB_H += wildmatch.h
 LIB_H += wt-status.h
@@ -817,11 +822,13 @@ LIB_OBJS += ewah/ewah_io.o
 LIB_OBJS += ewah/ewah_rlw.o
 LIB_OBJS += exec_cmd.o
 LIB_OBJS += fetch-pack.o
+LIB_OBJS += fs_cache.o
 LIB_OBJS += fsck.o
 LIB_OBJS += gettext.o
 LIB_OBJS += gpg-interface.o
 LIB_OBJS += graph.o
 LIB_OBJS += grep.o
+LIB_OBJS += hash-io.o
 LIB_OBJS += hashmap.o
 LIB_OBJS += help.o
 LIB_OBJS += hex.o
@@ -875,6 +882,7 @@ LIB_OBJS += replace_object.o
 LIB_OBJS += rerere.o
 LIB_OBJS += resolve-undo.o
 LIB_OBJS += revision.o
+LIB_OBJS += rijndael-alg-fst.o
 LIB_OBJS += run-command.o
 LIB_OBJS += send-pack.o
 LIB_OBJS += sequencer.o
@@ -908,6 +916,7 @@ LIB_OBJS += utf8.o
 LIB_OBJS += varint.o
 LIB_OBJS += version.o
 LIB_OBJS += versioncmp.o
+LIB_OBJS += vmac.o
 LIB_OBJS += walker.o
 LIB_OBJS += wildmatch.o
 LIB_OBJS += wrapper.o
@@ -1362,6 +1371,11 @@ else
 		COMPAT_OBJS += compat/win32mmap.o
 	endif
 endif
+ifdef NO_SSE
+	BASIC_CFLAGS += -DNO_SSE
+else
+	BASIC_CFLAGS += -msse4
+endif
 ifdef OBJECT_CREATION_USES_RENAMES
 	COMPAT_CFLAGS += -DOBJECT_CREATION_MODE=1
 endif
@@ -1473,6 +1487,13 @@ ifdef INTERNAL_QSORT
 endif
 ifdef RUNTIME_PREFIX
 	COMPAT_CFLAGS += -DRUNTIME_PREFIX
+endif
+
+ifdef USE_WATCHMAN
+	LIB_H += watchman-support.h
+	LIB_OBJS += watchman-support.o
+	EXTLIBS += $(WATCHMAN_LIBS)
+	BASIC_CFLAGS += -DUSE_WATCHMAN
 endif
 
 ifdef NO_PTHREADS
@@ -2235,6 +2256,8 @@ GIT-BUILD-OPTIONS: FORCE
 	@echo NO_PERL=\''$(subst ','\'',$(subst ','\'',$(NO_PERL)))'\' >>$@
 	@echo NO_PYTHON=\''$(subst ','\'',$(subst ','\'',$(NO_PYTHON)))'\' >>$@
 	@echo NO_UNIX_SOCKETS=\''$(subst ','\'',$(subst ','\'',$(NO_UNIX_SOCKETS)))'\' >>$@
+	@echo USE_WATCHMAN=\''$(subst ','\'',$(subst ','\'',$(USE_WATCHMAN)))'\' >>$@
+	@echo NO_SSE=\''$(subst ','\'',$(subst ','\'',$(NO_SSE)))'\' >>$@
 ifdef TEST_OUTPUT_DIRECTORY
 	@echo TEST_OUTPUT_DIRECTORY=\''$(subst ','\'',$(subst ','\'',$(TEST_OUTPUT_DIRECTORY)))'\' >>$@
 endif

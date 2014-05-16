@@ -45,13 +45,13 @@ static struct test_entry *alloc_test_entry(int hash, char *key, int klen,
 #define TEST_ADD 16
 #define TEST_SIZE 100000
 
-static unsigned int hash(unsigned int method, unsigned int i, const char *key)
+static unsigned int hash(unsigned int method, unsigned int i, const char *key, int len)
 {
 	unsigned int hash;
 	switch (method & 3)
 	{
 	case HASH_METHOD_FNV:
-		hash = strhash(key);
+		hash = memhash(key, len);
 		break;
 	case HASH_METHOD_I:
 		hash = i;
@@ -84,9 +84,9 @@ static void perf_hashmap(unsigned int method, unsigned int rounds)
 	entries = malloc(TEST_SIZE * sizeof(struct test_entry *));
 	hashes = malloc(TEST_SIZE * sizeof(int));
 	for (i = 0; i < TEST_SIZE; i++) {
-		snprintf(buf, sizeof(buf), "%i", i);
-		entries[i] = alloc_test_entry(0, buf, strlen(buf), "", 0);
-		hashes[i] = hash(method, i, entries[i]->key);
+		int len = snprintf(buf, sizeof(buf), "%i", i);
+		entries[i] = alloc_test_entry(0, buf, len, "", 0);
+		hashes[i] = hash(method, i, entries[i]->key, len);
 	}
 
 	if (method & TEST_ADD) {
@@ -130,7 +130,7 @@ static void perf_hashmap(unsigned int method, unsigned int rounds)
 /*
  * Read stdin line by line and print result of commands to stdout:
  *
- * hash key -> strhash(key) memhash(key) strihash(key) memihash(key)
+ * hash key -> memhash(key) memihash(key)
  * put key value -> NULL / old value
  * get key -> NULL / value
  * remove key -> NULL / old value
@@ -165,7 +165,7 @@ int main(int argc, char *argv[])
 		p1 = strtok(NULL, DELIM);
 		if (p1) {
 			l1 = strlen(p1);
-			hash = icase ? strihash(p1) : strhash(p1);
+			hash = icase ? memihash(p1, l1) : memhash(p1, l1);
 			p2 = strtok(NULL, DELIM);
 			if (p2)
 				l2 = strlen(p2);
@@ -174,8 +174,7 @@ int main(int argc, char *argv[])
 		if (!strcmp("hash", cmd) && l1) {
 
 			/* print results of different hash functions */
-			printf("%u %u %u %u\n", strhash(p1), memhash(p1, l1),
-					strihash(p1), memihash(p1, l1));
+			printf("%u %u\n", memhash(p1, l1), memihash(p1, l1));
 
 		} else if (!strcmp("add", cmd) && l1 && l2) {
 

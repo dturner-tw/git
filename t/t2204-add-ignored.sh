@@ -18,7 +18,7 @@ test_expect_success setup '
 for i in file dir/file dir 'd*'
 do
 	test_expect_success "no complaints for unignored $i" '
-		rm -f .git/index &&
+		rm -f .git/index .git/fs_cache &&
 		git add "$i" &&
 		git ls-files "$i" >out &&
 		test -s out
@@ -28,7 +28,7 @@ done
 for i in ign dir/ign dir/sub dir/sub/*ign sub/file sub sub/*
 do
 	test_expect_success "complaints for ignored $i" '
-		rm -f .git/index &&
+		rm -f .git/index .git/fs_cache &&
 		test_must_fail git add "$i" 2>err &&
 		git ls-files "$i" >out &&
 		! test -s out
@@ -39,7 +39,7 @@ do
 	'
 
 	test_expect_success "complaints for ignored $i with unignored file" '
-		rm -f .git/index &&
+		rm -f .git/index .git/fs_cache &&
 		test_must_fail git add "$i" file 2>err &&
 		git ls-files "$i" >out &&
 		! test -s out

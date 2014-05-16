@@ -2,6 +2,7 @@
  * Copyright (C) 2005 Junio C Hamano
  */
 #include "cache.h"
+#include "fs_cache.h"
 #include "quote.h"
 #include "commit.h"
 #include "diff.h"
@@ -17,24 +18,8 @@
  * diff-files
  */
 
-/*
- * Has the work tree entity been removed?
- *
- * Return 1 if it was removed from the work tree, 0 if an entity to be
- * compared with the cache entry ce still exists (the latter includes
- * the case where a directory that is not a submodule repository
- * exists for ce that is a submodule -- it is a submodule that is not
- * checked out).  Return negative for an error.
- */
-static int check_removed(const struct cache_entry *ce, struct stat *st)
+static int check_gitlink(const struct cache_entry *ce, struct stat *st)
 {
-	if (lstat(ce->name, st) < 0) {
-		if (errno != ENOENT && errno != ENOTDIR)
-			return -1;
-		return 1;
-	}
-	if (has_symlink_leading_path(ce->name, ce_namelen(ce)))
-		return 1;
 	if (S_ISDIR(st->st_mode)) {
 		unsigned char sub[20];
 
@@ -53,6 +38,52 @@ static int check_removed(const struct cache_entry *ce, struct stat *st)
 		    resolve_gitlink_ref(ce->name, "HEAD", sub))
 			return 1;
 	}
+	return 0;
+}
+
+static int fs_cache_check_removed(const struct fs_cache *fs_cache, const struct cache_entry *ce, struct stat *st)
+{
+	struct fsc_entry *fe;
+
+	fe = fs_cache_file_exists(fs_cache, ce->name, ce_namelen(ce));
+	if (!fe) {
+		return 1;
+	}
+	if (fe_deleted(fe)) {
+		return 1;
+	}
+
+	fe_to_stat(fe, st);
+
+	if (check_gitlink(ce, st))
+		return 1;
+
+	return 0;
+}
+
+/*
+ * Has the work tree entity been removed?
+ *
+ * Return 1 if it was removed from the work tree, 0 if an entity to be
+ * compared with the cache entry ce still exists (the latter includes
+ * the case where a directory that is not a submodule repository
+ * exists for ce that is a submodule -- it is a submodule that is not
+ * checked out).  Return negative for an error.
+ */
+static int check_removed(const struct cache_entry *ce, struct stat *st)
+{
+	if (the_index.fs_cache)
+		return fs_cache_check_removed(the_index.fs_cache, ce, st);
+
+	if (lstat(ce->name, st) < 0) {
+		if (errno != ENOENT && errno != ENOTDIR)
+			return -1;
+		return 1;
+	}
+	if (has_symlink_leading_path(ce->name, ce_namelen(ce)))
+		return 1;
+	if (check_gitlink(ce, st))
+		return 1;
 	return 0;
 }
 

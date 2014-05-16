@@ -8,8 +8,6 @@
 
 /* FNV-1 functions */
 
-extern unsigned int strhash(const char *buf);
-extern unsigned int strihash(const char *buf);
 extern unsigned int memhash(const void *buf, size_t len);
 extern unsigned int memihash(const void *buf, size_t len);
 

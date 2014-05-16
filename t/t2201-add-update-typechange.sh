@@ -124,7 +124,9 @@ test_expect_success diff-index '
 
 test_expect_success 'add -u' '
 	rm -f ".git/saved-index" &&
+	rm -f ".git/saved-fs_cache" &&
 	cp -p ".git/index" ".git/saved-index" &&
+	(test ! -f .git/fs_cache || cp -p ".git/fs_cache" ".git/saved-fs_cache") &&
 	git add -u &&
 	git ls-files -s >actual &&
 	test_cmp expect-final actual
@@ -134,7 +136,8 @@ test_expect_success 'commit -a' '
 	if test -f ".git/saved-index"
 	then
 		rm -f ".git/index" &&
-		mv ".git/saved-index" ".git/index"
+		mv ".git/saved-index" ".git/index" &&
+		(test ! -f .git/saved-fs_cache || mv ".git/saved-fs_cache" ".git/fs_cache")
 	fi &&
 	git commit -m "second" -a &&
 	git ls-files -s >actual &&

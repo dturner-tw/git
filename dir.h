@@ -81,7 +81,18 @@ struct dir_struct {
 		DIR_NO_GITLINKS = 1<<3,
 		DIR_COLLECT_IGNORED = 1<<4,
 		DIR_SHOW_IGNORED_TOO = 1<<5,
-		DIR_COLLECT_KILLED_ONLY = 1<<6
+		DIR_COLLECT_KILLED_ONLY = 1<<6,
+		/*
+		 * Whether the standard excludes are the only file
+		 * excludes which have been set up (if so, we can use
+		 * the fs_cache to optimize is_excluded).
+		 */
+		DIR_STD_EXCLUDES = 1<<7,
+		/*
+		 * Excludes should only check the command-line (for
+		 * use with fs_cache)
+		 */
+		DIR_EXCLUDE_CMDL_ONLY = 1<<8
 	} flags;
 	struct dir_entry **entries;
 	struct dir_entry **ignored;
@@ -222,5 +233,8 @@ static inline int dir_path_match(const struct dir_entry *ent,
 	return match_pathspec(pathspec, ent->name, len, prefix, seen,
 			      has_trailing_dir);
 }
+
+int get_dtype(struct dirent *de, const char *path, int len);
+
 
 #endif

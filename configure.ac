@@ -382,6 +382,11 @@ AS_HELP_STRING([],[Tcl/Tk interpreter will be found in a system.]),
 GIT_PARSE_WITH(tcltk))
 #
 
+# Declare the with-sse/without-sse options.
+AC_ARG_WITH(sse,
+AS_HELP_STRING([--with-sse],[use SSE instructions (default is YES)]),
+GIT_PARSE_WITH(sse))
+
 
 ## Checks for programs.
 AC_MSG_NOTICE([CHECKS for programs])
@@ -449,6 +454,7 @@ else
   fi
 fi
 GIT_CONF_SUBST([TCLTK_PATH])
+GIT_CONF_SUBST([NO_SSE])
 AC_CHECK_PROGS(ASCIIDOC, [asciidoc])
 if test -n "$ASCIIDOC"; then
 	AC_MSG_CHECKING([for asciidoc version])
@@ -962,6 +968,12 @@ GIT_CONF_SUBST([NO_INITGROUPS])
 #
 # Define NO_ICONV if your libc does not properly support iconv.
 
+# Check for watchman client library
+
+AC_CHECK_LIB([watchman], [watchman_connect],
+       [USE_WATCHMAN=YesPlease],
+       [USE_WATCHMAN=])
+GIT_CONF_SUBST([USE_WATCHMAN])
 
 ## Other checks.
 # Define USE_PIC if you need the main git objects to be built with -fPIC

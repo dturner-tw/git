@@ -23,7 +23,7 @@ maketree () {
 }
 
 settree () {
-	rm -f .git/index .git/index.lock &&
+	rm -f .git/index .git/index.lock .git/fs_cache &&
 	git clean -d -f -f -q -x &&
 	git read-tree "$1" &&
 	git checkout-index -f -q -u -a &&

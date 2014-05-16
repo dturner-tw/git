@@ -5,6 +5,7 @@
  */
 #define NO_THE_INDEX_COMPATIBILITY_MACROS
 #include "cache.h"
+#include "fs_cache.h"
 #include "cache-tree.h"
 #include "refs.h"
 #include "dir.h"
@@ -14,6 +15,11 @@
 #include "resolve-undo.h"
 #include "strbuf.h"
 #include "varint.h"
+#include "hash-io.h"
+
+#ifdef USE_WATCHMAN
+#include "watchman-support.h"
+#endif
 
 static struct cache_entry *refresh_cache_entry(struct cache_entry *ce,
 					       unsigned int options);
@@ -1003,6 +1009,30 @@ int add_index_entry(struct index_state *istate, struct cache_entry *ce, int opti
 	return 0;
 }
 
+static int fs_cache_lstat(struct fs_cache *fs_cache,
+			const char *name, int len, struct stat *st)
+{
+
+	struct fsc_entry *fe;
+	if (!fs_cache)
+		return lstat(name, st);
+
+	fe = fs_cache_file_exists(fs_cache, name, len);
+	if (!fe) {
+		/* This is necessary because children of symlinks are not
+		 * included in the fs_cache. */
+		return lstat(name, st);
+	}
+
+	if (fe_deleted(fe)) {
+		errno = ENOENT;
+		return -1;
+	} else {
+		fe_to_stat(fe, st);
+	}
+	return 0;
+}
+
 /*
  * "refresh" does not calculate a new sha1 file or bring the
  * cache up-to-date for mode/content changes. But what it
@@ -1044,7 +1074,7 @@ static struct cache_entry *refresh_cache_ent(struct index_state *istate,
 		return ce;
 	}
 
-	if (lstat(ce->name, &st) < 0) {
+	if (fs_cache_lstat(the_index.fs_cache, ce->name, ce_namelen(ce), &st) < 0) {
 		if (ignore_missing && errno == ENOENT)
 			return ce;
 		if (err)
@@ -1304,8 +1334,7 @@ struct ondisk_cache_entry_extended {
 
 static int verify_hdr(struct cache_header *hdr, unsigned long size)
 {
-	git_SHA_CTX c;
-	unsigned char sha1[20];
+	unsigned char hash[20];
 	int hdr_version;
 
 	if (hdr->hdr_signature != htonl(CACHE_SIGNATURE))
@@ -1313,11 +1342,19 @@ static int verify_hdr(struct cache_header *hdr, unsigned long size)
 	hdr_version = ntohl(hdr->hdr_version);
 	if (hdr_version < INDEX_FORMAT_LB || INDEX_FORMAT_UB < hdr_version)
 		return error("bad index version %d", hdr_version);
-	git_SHA1_Init(&c);
-	git_SHA1_Update(&c, hdr, size - 20);
-	git_SHA1_Final(sha1, &c);
-	if (hashcmp(sha1, (unsigned char *)hdr + size - 20))
-		return error("bad index file sha1 signature");
+	if (hdr_version >= INDEX_FORMAT_VMAC_LB) {
+		vmac_ctx_t c;
+		vmac_set_key(VMAC_KEY, &c);
+		vmac_update_unaligned(hdr, size - 20, &c);
+		vmac_final(hash, &c);
+	} else {
+		git_SHA_CTX c;
+		git_SHA1_Init(&c);
+		git_SHA1_Update(&c, hdr, size - 20);
+		git_SHA1_Final(hash, &c);
+	}
+	if (hashcmp(hash, (unsigned char *)hdr + size - 20))
+		return error("bad index file signature");
 	return 0;
 }
 
@@ -1438,6 +1475,25 @@ static struct cache_entry *create_from_disk(struct ondisk_cache_entry *ondisk,
 	return ce;
 }
 
+static void do_load_fs_cache(struct index_state *istate, int force)
+{
+#ifdef USE_WATCHMAN
+	if (core_use_watchman && (istate->initialized || force)) {
+		if (istate->fs_cache) {
+			if (istate->fs_cache->invalid)
+				watchman_reload_fs_cache(istate);
+		} else {
+			if (watchman_load_fs_cache(istate)) {
+				if (istate->fs_cache) {
+					istate->fs_cache->needs_write = 0;
+					istate->fs_cache = NULL;
+				}
+			}
+		}
+	}
+#endif
+}
+
 /* remember to discard_cache() before reading a different cache! */
 int read_index_from(struct index_state *istate, const char *path)
 {
@@ -1449,6 +1505,8 @@ int read_index_from(struct index_state *istate, const char *path)
 	size_t mmap_size;
 	struct strbuf previous_name_buf = STRBUF_INIT, *previous_name;
 
+	do_load_fs_cache(istate, 0);
+
 	if (istate->initialized)
 		return istate->cache_nr;
 
@@ -1456,8 +1514,10 @@ int read_index_from(struct index_state *istate, const char *path)
 	istate->timestamp.nsec = 0;
 	fd = open(path, O_RDONLY);
 	if (fd < 0) {
-		if (errno == ENOENT)
+		if (errno == ENOENT) {
+			do_load_fs_cache(istate, 1);
 			return 0;
+		}
 		die_errno("index file open failed");
 	}
 
@@ -1483,7 +1543,7 @@ int read_index_from(struct index_state *istate, const char *path)
 	istate->cache = xcalloc(istate->cache_alloc, sizeof(*istate->cache));
 	istate->initialized = 1;
 
-	if (istate->version == 4)
+	if (istate->version >= 4)
 		previous_name = &previous_name_buf;
 	else
 		previous_name = NULL;
@@ -1522,6 +1582,9 @@ int read_index_from(struct index_state *istate, const char *path)
 		src_offset += 8;
 		src_offset += extsize;
 	}
+
+	do_load_fs_cache(istate, 0);
+
 	munmap(mmap, mmap_size);
 	return istate->cache_nr;
 
@@ -1552,6 +1615,8 @@ int discard_index(struct index_state *istate)
 	free(istate->cache);
 	istate->cache = NULL;
 	istate->cache_alloc = 0;
+	if (istate->fs_cache)
+		istate->fs_cache->invalid = 1;
 	return 0;
 }
 
@@ -1565,73 +1630,13 @@ int unmerged_index(const struct index_state *istate)
 	return 0;
 }
 
-#define WRITE_BUFFER_SIZE 8192
-static unsigned char write_buffer[WRITE_BUFFER_SIZE];
-static unsigned long write_buffer_len;
-
-static int ce_write_flush(git_SHA_CTX *context, int fd)
-{
-	unsigned int buffered = write_buffer_len;
-	if (buffered) {
-		git_SHA1_Update(context, write_buffer, buffered);
-		if (write_in_full(fd, write_buffer, buffered) != buffered)
-			return -1;
-		write_buffer_len = 0;
-	}
-	return 0;
-}
-
-static int ce_write(git_SHA_CTX *context, int fd, void *data, unsigned int len)
-{
-	while (len) {
-		unsigned int buffered = write_buffer_len;
-		unsigned int partial = WRITE_BUFFER_SIZE - buffered;
-		if (partial > len)
-			partial = len;
-		memcpy(write_buffer + buffered, data, partial);
-		buffered += partial;
-		if (buffered == WRITE_BUFFER_SIZE) {
-			write_buffer_len = buffered;
-			if (ce_write_flush(context, fd))
-				return -1;
-			buffered = 0;
-		}
-		write_buffer_len = buffered;
-		len -= partial;
-		data = (char *) data + partial;
-	}
-	return 0;
-}
-
-static int write_index_ext_header(git_SHA_CTX *context, int fd,
+static int write_index_ext_header(struct hash_context *context, int fd,
 				  unsigned int ext, unsigned int sz)
 {
 	ext = htonl(ext);
 	sz = htonl(sz);
-	return ((ce_write(context, fd, &ext, 4) < 0) ||
-		(ce_write(context, fd, &sz, 4) < 0)) ? -1 : 0;
-}
-
-static int ce_flush(git_SHA_CTX *context, int fd)
-{
-	unsigned int left = write_buffer_len;
-
-	if (left) {
-		write_buffer_len = 0;
-		git_SHA1_Update(context, write_buffer, left);
-	}
-
-	/* Flush first if not enough space for SHA1 signature */
-	if (left + 20 > WRITE_BUFFER_SIZE) {
-		if (write_in_full(fd, write_buffer, left) != left)
-			return -1;
-		left = 0;
-	}
-
-	/* Append the SHA1 signature at the end */
-	git_SHA1_Final(write_buffer + left, context);
-	left += 20;
-	return (write_in_full(fd, write_buffer, left) != left) ? -1 : 0;
+	return ((write_with_hash(context, fd, &ext, 4) < 0) ||
+		(write_with_hash(context, fd, &sz, 4) < 0)) ? -1 : 0;
 }
 
 static void ce_smudge_racily_clean_entry(struct cache_entry *ce)
@@ -1715,7 +1720,7 @@ static char *copy_cache_entry_to_ondisk(struct ondisk_cache_entry *ondisk,
 	}
 }
 
-static int ce_write_entry(git_SHA_CTX *c, int fd, struct cache_entry *ce,
+static int ce_write_entry(struct hash_context *c, int fd, struct cache_entry *ce,
 			  struct strbuf *previous_name)
 {
 	int size;
@@ -1755,7 +1760,7 @@ static int ce_write_entry(git_SHA_CTX *c, int fd, struct cache_entry *ce,
 			      ce->name + common, ce_namelen(ce) - common);
 	}
 
-	result = ce_write(c, fd, ondisk, size);
+	result = write_with_hash(c, fd, ondisk, size);
 	free(ondisk);
 	return result;
 }
@@ -1787,7 +1792,7 @@ void update_index_if_able(struct index_state *istate, struct lock_file *lockfile
 
 int write_index(struct index_state *istate, int newfd)
 {
-	git_SHA_CTX c;
+	struct hash_context c;
 	struct cache_header hdr;
 	int i, err, removed, extended, hdr_version;
 	struct cache_entry **cache = istate->cache;
@@ -1820,11 +1825,15 @@ int write_index(struct index_state *istate, int newfd)
 	hdr.hdr_version = htonl(hdr_version);
 	hdr.hdr_entries = htonl(entries - removed);
 
-	git_SHA1_Init(&c);
-	if (ce_write(&c, newfd, &hdr, sizeof(hdr)) < 0)
+	if (istate->version >= INDEX_FORMAT_VMAC_LB)
+		hash_context_init(&c, HASH_IO_VMAC);
+	else
+		hash_context_init(&c, HASH_IO_SHA1);
+
+	if (write_with_hash(&c, newfd, &hdr, sizeof(hdr)) < 0)
 		return -1;
 
-	previous_name = (hdr_version == 4) ? &previous_name_buf : NULL;
+	previous_name = (hdr_version >= 4) ? &previous_name_buf : NULL;
 	for (i = 0; i < entries; i++) {
 		struct cache_entry *ce = cache[i];
 		if (ce->ce_flags & CE_REMOVE)
@@ -1853,7 +1862,7 @@ int write_index(struct index_state *istate, int newfd)
 
 		cache_tree_write(&sb, istate->cache_tree);
 		err = write_index_ext_header(&c, newfd, CACHE_EXT_TREE, sb.len) < 0
-			|| ce_write(&c, newfd, sb.buf, sb.len) < 0;
+			|| write_with_hash(&c, newfd, sb.buf, sb.len) < 0;
 		strbuf_release(&sb);
 		if (err)
 			return -1;
@@ -1864,16 +1873,18 @@ int write_index(struct index_state *istate, int newfd)
 		resolve_undo_write(&sb, istate->resolve_undo);
 		err = write_index_ext_header(&c, newfd, CACHE_EXT_RESOLVE_UNDO,
 					     sb.len) < 0
-			|| ce_write(&c, newfd, sb.buf, sb.len) < 0;
+			|| write_with_hash(&c, newfd, sb.buf, sb.len) < 0;
 		strbuf_release(&sb);
 		if (err)
 			return -1;
 	}
 
-	if (ce_flush(&c, newfd) || fstat(newfd, &st))
+	if (write_with_hash_flush(&c, newfd) || fstat(newfd, &st))
 		return -1;
 	istate->timestamp.sec = (unsigned int)st.st_mtime;
 	istate->timestamp.nsec = ST_MTIME_NSEC(st);
+	hash_context_release(&c);
+
 	return 0;
 }
 
