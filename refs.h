@@ -441,4 +441,40 @@ extern int reflog_expire(const char *refname, const unsigned char *sha1,
 			 reflog_expiry_cleanup_fn cleanup_fn,
 			 void *policy_cb_data);
 
+/* refs backends */
+typedef struct ref_transaction *(*ref_transaction_begin_fn)(struct strbuf *err);
+typedef int (*ref_transaction_update_fn)(struct ref_transaction *transaction,
+		const char *refname, const unsigned char *new_sha1,
+		const unsigned char *old_sha1, unsigned int flags,
+		const char *msg, struct strbuf *err);
+typedef int (*ref_transaction_create_fn)(
+		struct ref_transaction *transaction,
+		const char *refname, const unsigned char *new_sha1,
+		unsigned int flags, const char *msg, struct strbuf *err);
+typedef int (*ref_transaction_delete_fn)(struct ref_transaction *transaction,
+		const char *refname, const unsigned char *old_sha1,
+		unsigned int flags, const char *msg, struct strbuf *err);
+typedef int (*ref_transaction_verify_fn)(struct ref_transaction *transaction,
+		const char *refname, const unsigned char *old_sha1,
+		unsigned int flags, struct strbuf *err);
+typedef int (*ref_transaction_commit_fn)(struct ref_transaction *transaction,
+				     struct strbuf *err);
+typedef void (*ref_transaction_free_fn)(struct ref_transaction *transaction);
+
+struct ref_be {
+	struct ref_be *next;
+	const char *name;
+	ref_transaction_begin_fn transaction_begin;
+	ref_transaction_update_fn transaction_update;
+	ref_transaction_create_fn transaction_create;
+	ref_transaction_delete_fn transaction_delete;
+	ref_transaction_verify_fn transaction_verify;
+	ref_transaction_commit_fn transaction_commit;
+	ref_transaction_free_fn transaction_free;
+};
+
+
+extern struct ref_be refs_be_files;
+int set_refs_backend(const char *name);
+
 #endif /* REFS_H */

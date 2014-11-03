@@ -5,6 +5,28 @@
 #include "refs.h"
 #include "lockfile.h"
 
+/*
+ * We always have a files backend and it is the default.
+ * This function us used to switch to an alternate backend.
+ */
+struct ref_be *the_refs_backend = &refs_be_files;
+/*
+ * List of all available backends
+ */
+struct ref_be *refs_backends = &refs_be_files;
+
+int set_refs_backend(const char *name)
+{
+	struct ref_be *be;
+
+	for (be = refs_backends; be; be = be->next)
+		if (!strcmp(be->name, name)) {
+			the_refs_backend = be;
+			return 0;
+		}
+	return 1;
+}
+
 int update_ref(const char *msg, const char *refname,
 	       const unsigned char *new_sha1, const unsigned char *old_sha1,
 	       unsigned int flags, enum action_on_err onerr)
@@ -708,4 +730,57 @@ int head_ref_namespaced(each_ref_fn fn, void *cb_data)
 	strbuf_release(&buf);
 
 	return ret;
+}
+
+
+/* backend functions */
+struct ref_transaction *ref_transaction_begin(struct strbuf *err)
+{
+	return the_refs_backend->transaction_begin(err);
+}
+
+
+int ref_transaction_update(struct ref_transaction *transaction,
+			   const char *refname, const unsigned char *new_sha1,
+			   const unsigned char *old_sha1, unsigned int flags,
+			   const char *msg, struct strbuf *err)
+{
+	return the_refs_backend->transaction_update(transaction,
+			refname, new_sha1, old_sha1, flags, msg, err);
+}
+
+int ref_transaction_create(struct ref_transaction *transaction,
+			   const char *refname, const unsigned char *new_sha1,
+			   unsigned int flags, const char *msg, struct strbuf *err)
+{
+	return the_refs_backend->transaction_create(transaction,
+			refname, new_sha1, flags, msg, err);
+}
+int ref_transaction_delete(struct ref_transaction *transaction,
+			   const char *refname, const unsigned char *old_sha1,
+			   unsigned int flags, const char *msg,
+			   struct strbuf *err)
+{
+	return the_refs_backend->transaction_delete(transaction,
+			refname, old_sha1, flags, msg, err);
+}
+
+int ref_transaction_verify(struct ref_transaction *transaction,
+			   const char *refname, const unsigned char *old_sha1,
+			   unsigned int flags,
+			   struct strbuf *err)
+{
+	return the_refs_backend->transaction_verify(transaction,
+			refname, old_sha1, flags, err);
+}
+
+
+int ref_transaction_commit(struct ref_transaction *transaction, struct strbuf *err)
+{
+	return the_refs_backend->transaction_commit(transaction, err);
+}
+
+void ref_transaction_free(struct ref_transaction *transaction)
+{
+	return the_refs_backend->transaction_free(transaction);
 }

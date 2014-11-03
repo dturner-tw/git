@@ -3024,14 +3024,14 @@ struct ref_transaction {
 	enum ref_transaction_state state;
 };
 
-struct ref_transaction *ref_transaction_begin(struct strbuf *err)
+static struct ref_transaction *files_transaction_begin(struct strbuf *err)
 {
 	assert(err);
 
 	return xcalloc(1, sizeof(struct ref_transaction));
 }
 
-void ref_transaction_free(struct ref_transaction *transaction)
+static void files_transaction_free(struct ref_transaction *transaction)
 {
 	int i;
 
@@ -3058,12 +3058,12 @@ static struct ref_update *add_update(struct ref_transaction *transaction,
 	return update;
 }
 
-int ref_transaction_update(struct ref_transaction *transaction,
-			   const char *refname,
-			   const unsigned char *new_sha1,
-			   const unsigned char *old_sha1,
-			   unsigned int flags, const char *msg,
-			   struct strbuf *err)
+static int files_transaction_update(struct ref_transaction *transaction,
+				  const char *refname,
+				  const unsigned char *new_sha1,
+				  const unsigned char *old_sha1,
+				  unsigned int flags, const char *msg,
+				  struct strbuf *err)
 {
 	struct ref_update *update;
 
@@ -3094,11 +3094,11 @@ int ref_transaction_update(struct ref_transaction *transaction,
 	return 0;
 }
 
-int ref_transaction_create(struct ref_transaction *transaction,
-			   const char *refname,
-			   const unsigned char *new_sha1,
-			   unsigned int flags, const char *msg,
-			   struct strbuf *err)
+static int files_transaction_create(struct ref_transaction *transaction,
+				  const char *refname,
+				  const unsigned char *new_sha1,
+				  unsigned int flags, const char *msg,
+				  struct strbuf *err)
 {
 	if (!new_sha1 || is_null_sha1(new_sha1))
 		die("BUG: create called without valid new_sha1");
@@ -3106,11 +3106,11 @@ int ref_transaction_create(struct ref_transaction *transaction,
 				      null_sha1, flags, msg, err);
 }
 
-int ref_transaction_delete(struct ref_transaction *transaction,
-			   const char *refname,
-			   const unsigned char *old_sha1,
-			   unsigned int flags, const char *msg,
-			   struct strbuf *err)
+static int files_transaction_delete(struct ref_transaction *transaction,
+				  const char *refname,
+				  const unsigned char *old_sha1,
+				  unsigned int flags, const char *msg,
+				  struct strbuf *err)
 {
 	if (old_sha1 && is_null_sha1(old_sha1))
 		die("BUG: delete called with old_sha1 set to zeros");
@@ -3119,11 +3119,11 @@ int ref_transaction_delete(struct ref_transaction *transaction,
 				      flags, msg, err);
 }
 
-int ref_transaction_verify(struct ref_transaction *transaction,
-			   const char *refname,
-			   const unsigned char *old_sha1,
-			   unsigned int flags,
-			   struct strbuf *err)
+int files_transaction_verify(struct ref_transaction *transaction,
+			     const char *refname,
+			     const unsigned char *old_sha1,
+			     unsigned int flags,
+			     struct strbuf *err)
 {
 	if (!old_sha1)
 		die("BUG: verify called with old_sha1 set to NULL");
@@ -3156,8 +3156,8 @@ static int ref_update_reject_duplicates(struct ref_update **updates, int n,
 	return 0;
 }
 
-int ref_transaction_commit(struct ref_transaction *transaction,
-			   struct strbuf *err)
+static int files_transaction_commit(struct ref_transaction *transaction,
+				  struct strbuf *err)
 {
 	int ret = 0, i;
 	int n = transaction->nr;
@@ -3409,3 +3409,15 @@ int reflog_expire(const char *refname, const unsigned char *sha1,
 	unlock_ref(lock);
 	return -1;
 }
+
+struct ref_be refs_be_files = {
+	NULL,
+	"files",
+	files_transaction_begin,
+	files_transaction_update,
+	files_transaction_create,
+	files_transaction_delete,
+	files_transaction_verify,
+	files_transaction_commit,
+	files_transaction_free,
+};
