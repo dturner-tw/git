@@ -170,6 +170,22 @@ extern int ref_exists(const char *);
 extern int is_branch(const char *refname);
 
 /*
+ * Return true iff a reference named refname could be created without
+ * conflicting with the name of an existing reference.  If
+ * skip is non-NULL, ignore potential conflicts with refs in skip
+ * (e.g., because they are scheduled for deletion in the same
+ * operation).
+ *
+ * Two reference names conflict if one of them exactly matches the
+ * leading components of the other; e.g., "foo/bar" conflicts with
+ * both "foo" and with "foo/bar/baz" but not with "foo/bar" or
+ * "foo/barbados".
+ *
+ * skip must be sorted.
+ */
+int is_refname_available(const char *newname, struct string_list *skip);
+
+/*
  * If refname is a non-symbolic reference that refers to a tag object,
  * and the tag can be (recursively) dereferenced to a non-tag object,
  * store the SHA1 of the referred-to object to sha1 and return 0.  If

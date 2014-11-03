@@ -263,7 +263,7 @@ struct ref_dir {
  * presence of an empty subdirectory does not block the creation of a
  * similarly-named reference.  (The fact that reference names with the
  * same leading components can conflict *with each other* is a
- * separate issue that is regulated by is_refname_available().)
+ * separate issue that is regulated by is_refname_available_dir().)
  *
  * Please note that the name field contains the fully-qualified
  * reference (or subdirectory) name.  Space could be saved by only
@@ -882,9 +882,9 @@ static void report_refname_conflict(struct ref_entry *entry,
  *
  * skip must be sorted.
  */
-static int is_refname_available(const char *refname,
-				const struct string_list *skip,
-				struct ref_dir *dir)
+static int is_refname_available_dir(const char *refname,
+				    const struct string_list *skip,
+				    struct ref_dir *dir)
 {
 	const char *slash;
 	size_t len;
@@ -2326,7 +2326,7 @@ static struct ref_lock *lock_ref_sha1_basic(const char *refname,
 	 * our refname.
 	 */
 	if (is_null_sha1(lock->old_sha1) &&
-	     !is_refname_available(refname, skip, get_packed_refs(&ref_cache))) {
+	     !is_refname_available_dir(refname, skip, get_packed_refs(&ref_cache))) {
 		last_errno = ENOTDIR;
 		goto error_return;
 	}
@@ -2767,8 +2767,7 @@ static int rename_ref_available(const char *oldname, const char *newname)
 	int ret;
 
 	string_list_insert(&skip, oldname);
-	ret = is_refname_available(newname, &skip, get_packed_refs(&ref_cache))
-	    && is_refname_available(newname, &skip, get_loose_refs(&ref_cache));
+	ret = is_refname_available(newname, &skip);
 	string_list_clear(&skip, 0);
 	return ret;
 }
@@ -2909,6 +2908,13 @@ static int copy_msg(char *buf, const char *msg)
 	*cp++ = '\n';
 	return cp - buf;
 }
+
+int is_refname_available(const char *newname, struct string_list *skip)
+{
+	return is_refname_available_dir(newname, skip, get_packed_refs(&ref_cache))
+		&& is_refname_available_dir(newname, skip, get_loose_refs(&ref_cache));
+}
+
 
 /* This function will fill in *err and return -1 on failure */
 int log_ref_setup(const char *refname, char *logfile, int bufsize, struct strbuf *err)
