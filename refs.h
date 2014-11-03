@@ -195,6 +195,8 @@ int is_refname_available(const char *newname, struct string_list *skip);
  */
 extern int peel_ref(const char *refname, unsigned char *sha1);
 
+extern int create_symref(const char *ref, const char *refs_heads_master, const char *logmsg);
+
 /*
  * Flags controlling ref_transaction_update(), ref_transaction_create(), etc.
  * REF_NODEREF: act on the ref directly, instead of dereferencing
@@ -460,6 +462,19 @@ typedef int (*ref_transaction_verify_fn)(struct ref_transaction *transaction,
 typedef int (*ref_transaction_commit_fn)(struct ref_transaction *transaction,
 				     struct strbuf *err);
 typedef void (*ref_transaction_free_fn)(struct ref_transaction *transaction);
+typedef const char *(*resolve_ref_unsafe_fn)(const char *ref,
+					     int resolve_flags,
+					     unsigned char *sha1, int *flags);
+typedef int (*is_refname_available_fn)(const char *refname,
+				       struct string_list *skip);
+typedef int (*pack_refs_fn)(unsigned int flags);
+typedef int (*peel_ref_fn)(const char *refname, unsigned char *sha1);
+typedef int (*create_symref_fn)(void *transaction,
+				const char *ref_target,
+				const char *refs_heads_master,
+				const char *logmsg);
+typedef int (*resolve_gitlink_ref_fn)(const char *path, const char *refname,
+				      unsigned char *sha1);
 
 struct ref_be {
 	struct ref_be *next;
@@ -471,6 +486,12 @@ struct ref_be {
 	ref_transaction_verify_fn transaction_verify;
 	ref_transaction_commit_fn transaction_commit;
 	ref_transaction_free_fn transaction_free;
+	resolve_ref_unsafe_fn resolve_ref_unsafe;
+	is_refname_available_fn is_refname_available;
+	pack_refs_fn pack_refs;
+	peel_ref_fn peel_ref;
+	create_symref_fn create_symref;
+	resolve_gitlink_ref_fn resolve_gitlink_ref;
 };
 
 
