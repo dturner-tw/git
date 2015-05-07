@@ -608,13 +608,15 @@ static void update_refs_for_switch(const struct checkout_opts *opts,
 				int temp;
 				char log_file[PATH_MAX];
 				char *ref_name = mkpath("refs/heads/%s", opts->new_orphan_branch);
+				struct strbuf err = STRBUF_INIT;
 
 				temp = log_all_ref_updates;
 				log_all_ref_updates = 1;
-				if (log_ref_setup(ref_name, log_file, sizeof(log_file))) {
-					fprintf(stderr, _("Can not do reflog for '%s'\n"),
-					    opts->new_orphan_branch);
+				if (log_ref_setup(ref_name, log_file, sizeof(log_file), &err)) {
+					fprintf(stderr, _("Can not do reflog for '%s'. %s\n"),
+					opts->new_orphan_branch, err.buf);
 					log_all_ref_updates = temp;
+					strbuf_release(&err);
 					return;
 				}
 				log_all_ref_updates = temp;
