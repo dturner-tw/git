@@ -3275,6 +3275,7 @@ int reflog_expire(const char *refname, const unsigned char *sha1,
 struct ref_be refs_be_files = {
 	NULL,
 	"files",
+	NULL,
 	files_transaction_begin,
 	files_transaction_update,
 	files_transaction_create,

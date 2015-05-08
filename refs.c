@@ -24,6 +24,8 @@ int set_refs_backend(const char *name)
 	for (be = refs_backends; be; be = be->next)
 		if (!strcmp(be->name, name)) {
 			the_refs_backend = be;
+			if (be->init_backend)
+				be->init_backend();
 			return 0;
 		}
 	return 1;
