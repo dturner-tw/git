@@ -35,7 +35,7 @@ int update_ref(const char *msg, const char *refname,
 	       const unsigned char *new_sha1, const unsigned char *old_sha1,
 	       unsigned int flags, enum action_on_err onerr)
 {
-	struct ref_transaction *t;
+	void *t;
 	struct strbuf err = STRBUF_INIT;
 
 	t = ref_transaction_begin(&err);
@@ -870,13 +870,13 @@ enum peel_status peel_object(const unsigned char *name, unsigned char *sha1)
 }
 
 /* backend functions */
-struct ref_transaction *ref_transaction_begin(struct strbuf *err)
+void *ref_transaction_begin(struct strbuf *err)
 {
 	return the_refs_backend->transaction_begin(err);
 }
 
 
-int ref_transaction_update(struct ref_transaction *transaction,
+int ref_transaction_update(void *transaction,
 			   const char *refname, const unsigned char *new_sha1,
 			   const unsigned char *old_sha1, unsigned int flags,
 			   const char *msg, struct strbuf *err)
@@ -885,14 +885,14 @@ int ref_transaction_update(struct ref_transaction *transaction,
 			refname, new_sha1, old_sha1, flags, msg, err);
 }
 
-int ref_transaction_create(struct ref_transaction *transaction,
+int ref_transaction_create(void *transaction,
 			   const char *refname, const unsigned char *new_sha1,
 			   unsigned int flags, const char *msg, struct strbuf *err)
 {
 	return the_refs_backend->transaction_create(transaction,
 			refname, new_sha1, flags, msg, err);
 }
-int ref_transaction_delete(struct ref_transaction *transaction,
+int ref_transaction_delete(void *transaction,
 			   const char *refname, const unsigned char *old_sha1,
 			   unsigned int flags, const char *msg,
 			   struct strbuf *err)
@@ -901,7 +901,7 @@ int ref_transaction_delete(struct ref_transaction *transaction,
 			refname, old_sha1, flags, msg, err);
 }
 
-int ref_transaction_verify(struct ref_transaction *transaction,
+int ref_transaction_verify(void *transaction,
 			   const char *refname, const unsigned char *old_sha1,
 			   unsigned int flags,
 			   struct strbuf *err)
@@ -910,13 +910,12 @@ int ref_transaction_verify(struct ref_transaction *transaction,
 			refname, old_sha1, flags, err);
 }
 
-
-int ref_transaction_commit(struct ref_transaction *transaction, struct strbuf *err)
+int ref_transaction_commit(void *transaction, struct strbuf *err)
 {
 	return the_refs_backend->transaction_commit(transaction, err);
 }
 
-void ref_transaction_free(struct ref_transaction *transaction)
+void ref_transaction_free(void *transaction)
 {
 	return the_refs_backend->transaction_free(transaction);
 }

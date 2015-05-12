@@ -7,7 +7,7 @@
  *
  * Calling sequence
  * ----------------
- * - Allocate and initialize a `struct ref_transaction` by calling
+ * - Allocate and initialize a transaction by calling
  *   `ref_transaction_begin()`.
  *
  * - List intended ref updates by calling functions like
@@ -33,7 +33,6 @@
  * The message is appended to err without first clearing err.
  * err will not be '\n' terminated.
  */
-struct ref_transaction;
 
 /*
  * Bit values set in the flags argument passed to each_ref_fn():
@@ -252,7 +251,7 @@ enum action_on_err {
  * Begin a reference transaction.  The reference transaction must
  * be freed by calling ref_transaction_free().
  */
-struct ref_transaction *ref_transaction_begin(struct strbuf *err);
+void *ref_transaction_begin(struct strbuf *err);
 
 /*
  * Reference transaction updates
@@ -296,7 +295,7 @@ struct ref_transaction *ref_transaction_begin(struct strbuf *err);
  * See the above comment "Reference transaction updates" for more
  * information.
  */
-int ref_transaction_update(struct ref_transaction *transaction,
+int ref_transaction_update(void *transaction,
 			   const char *refname,
 			   const unsigned char *new_sha1,
 			   const unsigned char *old_sha1,
@@ -312,7 +311,7 @@ int ref_transaction_update(struct ref_transaction *transaction,
  * See the above comment "Reference transaction updates" for more
  * information.
  */
-int ref_transaction_create(struct ref_transaction *transaction,
+int ref_transaction_create(void *transaction,
 			   const char *refname,
 			   const unsigned char *new_sha1,
 			   unsigned int flags, const char *msg,
@@ -326,7 +325,7 @@ int ref_transaction_create(struct ref_transaction *transaction,
  * See the above comment "Reference transaction updates" for more
  * information.
  */
-int ref_transaction_delete(struct ref_transaction *transaction,
+int ref_transaction_delete(void *transaction,
 			   const char *refname,
 			   const unsigned char *old_sha1,
 			   unsigned int flags, const char *msg,
@@ -340,7 +339,7 @@ int ref_transaction_delete(struct ref_transaction *transaction,
  * See the above comment "Reference transaction updates" for more
  * information.
  */
-int ref_transaction_verify(struct ref_transaction *transaction,
+int ref_transaction_verify(void *transaction,
 			   const char *refname,
 			   const unsigned char *old_sha1,
 			   unsigned int flags,
@@ -356,13 +355,13 @@ int ref_transaction_verify(struct ref_transaction *transaction,
 #define TRANSACTION_NAME_CONFLICT -1
 /* All other errors. */
 #define TRANSACTION_GENERIC_ERROR -2
-int ref_transaction_commit(struct ref_transaction *transaction,
+int ref_transaction_commit(void *transaction,
 			   struct strbuf *err);
 
 /*
  * Free an existing transaction and all associated data.
  */
-void ref_transaction_free(struct ref_transaction *transaction);
+void ref_transaction_free(void *transaction);
 
 /**
  * Lock, update, and unlock a single reference. This function
@@ -463,24 +462,24 @@ int bulk_update_commit(void);
 
 /* refs backends */
 typedef void (*ref_backend_init_fn)(void);
-typedef struct ref_transaction *(*ref_transaction_begin_fn)(struct strbuf *err);
-typedef int (*ref_transaction_update_fn)(struct ref_transaction *transaction,
+typedef void *(*ref_transaction_begin_fn)(struct strbuf *err);
+typedef int (*ref_transaction_update_fn)(void *transaction,
 		const char *refname, const unsigned char *new_sha1,
 		const unsigned char *old_sha1, unsigned int flags,
 		const char *msg, struct strbuf *err);
 typedef int (*ref_transaction_create_fn)(
-		struct ref_transaction *transaction,
+		void *transaction,
 		const char *refname, const unsigned char *new_sha1,
 		unsigned int flags, const char *msg, struct strbuf *err);
-typedef int (*ref_transaction_delete_fn)(struct ref_transaction *transaction,
+typedef int (*ref_transaction_delete_fn)(void *transaction,
 		const char *refname, const unsigned char *old_sha1,
 		unsigned int flags, const char *msg, struct strbuf *err);
-typedef int (*ref_transaction_verify_fn)(struct ref_transaction *transaction,
+typedef int (*ref_transaction_verify_fn)(void *transaction,
 		const char *refname, const unsigned char *old_sha1,
 		unsigned int flags, struct strbuf *err);
-typedef int (*ref_transaction_commit_fn)(struct ref_transaction *transaction,
+typedef int (*ref_transaction_commit_fn)(void *transaction,
 				     struct strbuf *err);
-typedef void (*ref_transaction_free_fn)(struct ref_transaction *transaction);
+typedef void (*ref_transaction_free_fn)(void *transaction);
 
 /* reflog functions */
 typedef int (*for_each_reflog_ent_fn)(const char *refname,
@@ -495,6 +494,7 @@ typedef int (*create_reflog_fn)(const char *refname, struct strbuf *err);
 typedef int (*delete_reflog_fn)(const char *refname);
 
 /* resolution functions */
+typedef void (*ref_transaction_free_fn)(void *transaction);
 typedef const char *(*resolve_ref_unsafe_fn)(const char *ref,
 					     int resolve_flags,
 					     unsigned char *sha1, int *flags);

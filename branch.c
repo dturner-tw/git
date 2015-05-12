@@ -279,7 +279,7 @@ void create_branch(const char *head,
 		log_all_ref_updates = 1;
 
 	if (!dont_change_ref) {
-		struct ref_transaction *transaction;
+		void *transaction;
 		struct strbuf err = STRBUF_INIT;
 
 		transaction = ref_transaction_begin(&err);

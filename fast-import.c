@@ -1688,7 +1688,7 @@ found_entry:
 static int update_branch(struct branch *b)
 {
 	static const char *msg = "fast-import";
-	struct ref_transaction *transaction;
+	void *transaction;
 	unsigned char old_sha1[20];
 	struct strbuf err = STRBUF_INIT;
 
@@ -1746,7 +1746,7 @@ static void dump_tags(void)
 	struct tag *t;
 	struct strbuf ref_name = STRBUF_INIT;
 	struct strbuf err = STRBUF_INIT;
-	struct ref_transaction *transaction;
+	void *transaction;
 
 	transaction = ref_transaction_begin(&err);
 	if (!transaction) {

@@ -175,7 +175,7 @@ static int parse_next_sha1(struct strbuf *input, const char **next,
  * depending on how line_termination is set.
  */
 
-static const char *parse_cmd_update(struct ref_transaction *transaction,
+static const char *parse_cmd_update(void *transaction,
 				    struct strbuf *input, const char *next)
 {
 	struct strbuf err = STRBUF_INIT;
@@ -210,7 +210,7 @@ static const char *parse_cmd_update(struct ref_transaction *transaction,
 	return next;
 }
 
-static const char *parse_cmd_create(struct ref_transaction *transaction,
+static const char *parse_cmd_create(void *transaction,
 				    struct strbuf *input, const char *next)
 {
 	struct strbuf err = STRBUF_INIT;
@@ -241,7 +241,7 @@ static const char *parse_cmd_create(struct ref_transaction *transaction,
 	return next;
 }
 
-static const char *parse_cmd_delete(struct ref_transaction *transaction,
+static const char *parse_cmd_delete(void *transaction,
 				    struct strbuf *input, const char *next)
 {
 	struct strbuf err = STRBUF_INIT;
@@ -277,7 +277,7 @@ static const char *parse_cmd_delete(struct ref_transaction *transaction,
 	return next;
 }
 
-static const char *parse_cmd_verify(struct ref_transaction *transaction,
+static const char *parse_cmd_verify(void *transaction,
 				    struct strbuf *input, const char *next)
 {
 	struct strbuf err = STRBUF_INIT;
@@ -315,7 +315,7 @@ static const char *parse_cmd_option(struct strbuf *input, const char *next)
 	return next + 8;
 }
 
-static void update_refs_stdin(struct ref_transaction *transaction)
+static void update_refs_stdin(void *transaction)
 {
 	struct strbuf input = STRBUF_INIT;
 	const char *next;
@@ -372,7 +372,7 @@ int cmd_update_ref(int argc, const char **argv, const char *prefix)
 
 	if (read_stdin) {
 		struct strbuf err = STRBUF_INIT;
-		struct ref_transaction *transaction;
+		void *transaction;
 
 		transaction = ref_transaction_begin(&err);
 		if (!transaction)

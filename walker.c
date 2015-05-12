@@ -253,7 +253,7 @@ int walker_fetch(struct walker *walker, int targets, char **target,
 {
 	struct strbuf refname = STRBUF_INIT;
 	struct strbuf err = STRBUF_INIT;
-	struct ref_transaction *transaction = NULL;
+	void *transaction = NULL;
 	unsigned char *sha1 = xmalloc(targets * 20);
 	char *msg = NULL;
 	int i, ret = -1;
