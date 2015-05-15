@@ -2395,13 +2395,18 @@ static int files_is_refname_available(const char *newname, struct string_list *s
 		&& is_refname_available_dir(newname, skip, get_loose_refs(&ref_cache));
 }
 
+static void get_reflog_name(const char *refname, char *logfile, size_t bufsize)
+{
+	git_snpath(logfile, bufsize, "logs/%s", refname);
+}
 
 /* This function will fill in *err and return -1 on failure */
-int log_ref_setup(const char *refname, char *logfile, int bufsize, struct strbuf *err)
+int files_create_reflog(const char *refname, struct strbuf *err)
 {
 	int logfd, oflags = O_APPEND | O_WRONLY;
+	char logfile[PATH_MAX];
 
-	git_snpath(logfile, bufsize, "logs/%s", refname);
+	get_reflog_name(refname, logfile, sizeof(logfile));
 	if (log_all_ref_updates &&
 	    (starts_with(refname, "refs/heads/") ||
 	     starts_with(refname, "refs/remotes/") ||
@@ -2460,9 +2465,10 @@ static int log_ref_write_fd(int fd, const unsigned char *old_sha1,
 	return 0;
 }
 
-static int log_ref_write(const char *refname, const unsigned char *old_sha1,
-			 const unsigned char *new_sha1, const char *msg,
-			 struct strbuf *err)
+static int files_log_ref_write(const char *refname,
+			       const unsigned char *old_sha1,
+			       const unsigned char *new_sha1, const char *msg,
+			       struct strbuf *err)
 {
 	int logfd, result, oflags = O_APPEND | O_WRONLY;
 	char log_file[PATH_MAX];
@@ -2470,10 +2476,12 @@ static int log_ref_write(const char *refname, const unsigned char *old_sha1,
 	if (log_all_ref_updates < 0)
 		log_all_ref_updates = !is_bare_repository();
 
-	result = log_ref_setup(refname, log_file, sizeof(log_file), err);
+	result = files_create_reflog(refname, err);
 
 	if (result)
 		return result;
+
+	get_reflog_name(refname, log_file, sizeof(log_file));
 
 	logfd = open(log_file, oflags);
 	if (logfd < 0)
@@ -2634,7 +2642,7 @@ static int files_create_symref(void *trans,
 	return 0;
 }
 
-int reflog_exists(const char *refname)
+static int files_reflog_exists(const char *refname)
 {
 	struct stat st;
 
@@ -2642,7 +2650,7 @@ int reflog_exists(const char *refname)
 		S_ISREG(st.st_mode);
 }
 
-int delete_reflog(const char *refname)
+static int files_delete_reflog(const char *refname)
 {
 	return remove_path(git_path("logs/%s", refname));
 }
@@ -2658,7 +2666,9 @@ static char *find_beginning_of_line(char *bob, char *scan)
 	return scan;
 }
 
-int for_each_reflog_ent_reverse(const char *refname, each_reflog_ent_fn fn, void *cb_data)
+static int files_for_each_reflog_ent_reverse(const char *refname,
+					     each_reflog_ent_fn fn,
+					     void *cb_data)
 {
 	struct strbuf sb = STRBUF_INIT;
 	FILE *logfp;
@@ -2760,7 +2770,8 @@ int for_each_reflog_ent_reverse(const char *refname, each_reflog_ent_fn fn, void
 	return ret;
 }
 
-int for_each_reflog_ent(const char *refname, each_reflog_ent_fn fn, void *cb_data)
+static int files_for_each_reflog_ent(const char *refname,
+				     each_reflog_ent_fn fn, void *cb_data)
 {
 	FILE *logfp;
 	struct strbuf sb = STRBUF_INIT;
@@ -2821,7 +2832,7 @@ static int do_for_each_reflog(struct strbuf *name, each_ref_fn fn, void *cb_data
 	return retval;
 }
 
-int for_each_reflog(each_ref_fn fn, void *cb_data)
+static int files_for_each_reflog(each_ref_fn fn, void *cb_data)
 {
 	int retval;
 	struct strbuf name;
@@ -3283,6 +3294,12 @@ struct ref_be refs_be_files = {
 	files_transaction_verify,
 	files_transaction_commit,
 	files_transaction_free,
+	files_for_each_reflog_ent,
+	files_for_each_reflog_ent_reverse,
+	files_for_each_reflog,
+	files_reflog_exists,
+	files_create_reflog,
+	files_delete_reflog,
 	files_resolve_ref_unsafe,
 	files_is_refname_available,
 	files_pack_refs,

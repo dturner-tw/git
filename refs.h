@@ -218,11 +218,6 @@ extern int create_symref(const char *ref, const char *refs_heads_master, const c
  */
 #define REF_NODEREF	0x01
 
-/*
- * Setup reflog before using. Fill in err and return -1 on failure.
- */
-int log_ref_setup(const char *refname, char *logfile, int bufsize, struct strbuf *err);
-
 /** Reads log for the value of ref during at_time. **/
 extern int read_ref_at(const char *refname, unsigned int flags,
 		       unsigned long at_time, int cnt,
@@ -231,6 +226,9 @@ extern int read_ref_at(const char *refname, unsigned int flags,
 
 /** Check if a particular reflog exists */
 extern int reflog_exists(const char *refname);
+
+/** Create a reflog */
+extern int create_reflog(const char *refname, struct strbuf *err);
 
 /** Delete a reflog */
 extern int delete_reflog(const char *refname);
@@ -507,6 +505,20 @@ typedef int (*ref_transaction_verify_fn)(struct ref_transaction *transaction,
 typedef int (*ref_transaction_commit_fn)(struct ref_transaction *transaction,
 				     struct strbuf *err);
 typedef void (*ref_transaction_free_fn)(struct ref_transaction *transaction);
+
+/* reflog functions */
+typedef int (*for_each_reflog_ent_fn)(const char *refname,
+				      each_reflog_ent_fn fn,
+				      void *cb_data);
+typedef int (*for_each_reflog_ent_reverse_fn)(const char *refname,
+					      each_reflog_ent_fn fn,
+					      void *cb_data);
+typedef int (*for_each_reflog_fn)(each_ref_fn fn, void *cb_data);
+typedef int (*reflog_exists_fn)(const char *refname);
+typedef int (*create_reflog_fn)(const char *refname, struct strbuf *err);
+typedef int (*delete_reflog_fn)(const char *refname);
+
+/* resolution functions */
 typedef const char *(*resolve_ref_unsafe_fn)(const char *ref,
 					     int resolve_flags,
 					     unsigned char *sha1, int *flags);
@@ -520,6 +532,8 @@ typedef int (*create_symref_fn)(void *transaction,
 				const char *logmsg);
 typedef int (*resolve_gitlink_ref_fn)(const char *path, const char *refname,
 				      unsigned char *sha1);
+
+/* iteration functions */
 typedef int (*head_ref_fn)(each_ref_fn fn, void *cb_data);
 typedef int (*head_ref_submodule_fn)(const char *submodule, each_ref_fn fn,
 				     void *cb_data);
@@ -546,6 +560,12 @@ struct ref_be {
 	ref_transaction_verify_fn transaction_verify;
 	ref_transaction_commit_fn transaction_commit;
 	ref_transaction_free_fn transaction_free;
+	for_each_reflog_ent_fn for_each_reflog_ent;
+	for_each_reflog_ent_reverse_fn for_each_reflog_ent_reverse;
+	for_each_reflog_fn for_each_reflog;
+	reflog_exists_fn reflog_exists;
+	create_reflog_fn create_reflog;
+	delete_reflog_fn delete_reflog;
 	resolve_ref_unsafe_fn resolve_ref_unsafe;
 	is_refname_available_fn is_refname_available;
 	pack_refs_fn pack_refs;
