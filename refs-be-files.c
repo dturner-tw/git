@@ -2442,32 +2442,6 @@ static int commit_ref(struct ref_lock *lock)
 	return 0;
 }
 
-/*
- * copy the reflog message msg to buf, which has been allocated sufficiently
- * large, while cleaning up the whitespaces.  Especially, convert LF to space,
- * because reflog file is one line per entry.
- */
-static int copy_msg(char *buf, const char *msg)
-{
-	char *cp = buf;
-	char c;
-	int wasspace = 1;
-
-	*cp++ = '\t';
-	while ((c = *msg++)) {
-		if (wasspace && isspace(c))
-			continue;
-		wasspace = isspace(c);
-		if (wasspace)
-			c = ' ';
-		*cp++ = c;
-	}
-	while (buf < cp && isspace(cp[-1]))
-		cp--;
-	*cp++ = '\n';
-	return cp - buf;
-}
-
 static int files_is_refname_available(const char *newname, struct string_list *skip)
 {
 	return is_refname_available_dir(newname, skip, get_packed_refs(&ref_cache))
@@ -2524,21 +2498,14 @@ static int log_ref_write_fd(int fd, const unsigned char *old_sha1,
 			    const unsigned char *new_sha1,
 			    const char *committer, const char *msg)
 {
-	int msglen, written;
-	unsigned maxlen, len;
-	char *logrec;
+	int written;
+	int len;
 
-	msglen = msg ? strlen(msg) : 0;
-	maxlen = strlen(committer) + msglen + 100;
-	logrec = xmalloc(maxlen);
-	len = sprintf(logrec, "%s %s %s\n",
-		      sha1_to_hex(old_sha1),
-		      sha1_to_hex(new_sha1),
-		      committer);
-	if (msglen)
-		len += copy_msg(logrec + len - 1, msg) - 1;
+	char *logrec = format_reflog_msg(old_sha1, new_sha1,
+					 committer, msg,
+					 &len);
 
-	written = len <= maxlen ? write_in_full(fd, logrec, len) : -1;
+	written = write_in_full(fd, logrec, len);
 	free(logrec);
 	if (written != len)
 		return -1;

@@ -410,6 +410,11 @@ int update_ref(const char *msg, const char *refname,
 extern int parse_hide_refs_config(const char *var, const char *value, const char *);
 extern int ref_is_hidden(const char *);
 
+char *format_reflog_msg(const unsigned char *old_sha1,
+			const unsigned char *new_sha1,
+			const char *committer, const char *msg,
+			int *len);
+
 enum expire_reflog_flags {
 	EXPIRE_REFLOGS_DRY_RUN = 1 << 0,
 	EXPIRE_REFLOGS_UPDATE_REF = 1 << 1,
