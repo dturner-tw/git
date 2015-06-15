@@ -1046,3 +1046,18 @@ int delete_reflog(const char *refname)
 {
 	return the_refs_backend->delete_reflog(refname);
 }
+
+int bulk_update_begin(int flags)
+{
+	return the_refs_backend->bulk_update_begin(flags);
+}
+
+void bulk_add(const char *refname, const unsigned char *sha1)
+{
+	the_refs_backend->bulk_add(refname, sha1);
+}
+
+int bulk_update_commit(void)
+{
+	return the_refs_backend->bulk_update_commit();
+}

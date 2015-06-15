@@ -111,36 +111,6 @@ extern void warn_dangling_symref(FILE *fp, const char *msg_fmt, const char *refn
 extern void warn_dangling_symrefs(FILE *fp, const char *msg_fmt, const struct string_list *refnames);
 
 /*
- * Lock the packed-refs file for writing.  Flags is passed to
- * hold_lock_file_for_update().  Return 0 on success.
- * Errno is set to something meaningful on error.
- */
-extern int lock_packed_refs(int flags);
-
-/*
- * Add a reference to the in-memory packed reference cache.  This may
- * only be called while the packed-refs file is locked (see
- * lock_packed_refs()).  To actually write the packed-refs file, call
- * commit_packed_refs().
- */
-extern void add_packed_ref(const char *refname, const unsigned char *sha1);
-
-/*
- * Write the current version of the packed refs cache from memory to
- * disk.  The packed-refs file must already be locked for writing (see
- * lock_packed_refs()).  Return zero on success.
- * Sets errno to something meaningful on error.
- */
-extern int commit_packed_refs(void);
-
-/*
- * Rollback the lockfile for the packed-refs file, and discard the
- * in-memory packed reference cache.  (The packed-refs file will be
- * read anew if it is needed again after this function is called.)
- */
-extern void rollback_packed_refs(void);
-
-/*
  * Flags for controlling behaviour of pack_refs()
  * PACK_REFS_PRUNE: Prune loose refs after packing
  * PACK_REFS_ALL:   Pack _all_ refs, not just tags and already packed refs
@@ -485,6 +455,12 @@ extern int reflog_expire(const char *refname, const unsigned char *sha1,
 			 reflog_expiry_cleanup_fn cleanup_fn,
 			 void *policy_cb_data);
 
+int bulk_update_begin(int flags);
+
+void bulk_add(const char *refname, const unsigned char *sha1);
+
+int bulk_update_commit(void);
+
 /* refs backends */
 typedef void (*ref_backend_init_fn)(void);
 typedef struct ref_transaction *(*ref_transaction_begin_fn)(struct strbuf *err);
@@ -549,6 +525,11 @@ typedef int (*for_each_rawref_fn)(each_ref_fn fn, void *cb_data);
 typedef int (*for_each_namespaced_ref_fn)(each_ref_fn fn, void *cb_data);
 typedef int (*for_each_replace_ref_fn)(each_ref_fn fn, void *cb_data);
 
+/* bulk update functions (for e.g clone) */
+typedef int (*bulk_update_begin_fn)(int flags);
+typedef void (*bulk_add_fn)(const char *refname, const unsigned char *sha1);
+typedef int (*bulk_update_commit_fn)(void);
+
 struct ref_be {
 	struct ref_be *next;
 	const char *name;
@@ -581,6 +562,9 @@ struct ref_be {
 	for_each_rawref_fn for_each_rawref;
 	for_each_namespaced_ref_fn for_each_namespaced_ref;
 	for_each_replace_ref_fn for_each_replace_ref;
+	bulk_update_begin_fn bulk_update_begin;
+	bulk_add_fn bulk_add;
+	bulk_update_commit_fn bulk_update_commit;
 };
 
 
