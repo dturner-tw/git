@@ -160,19 +160,20 @@ static void free_message(struct commit *commit, struct commit_message *msg)
 
 static void write_cherry_pick_head(struct commit *commit, const char *pseudoref)
 {
-	const char *filename;
-	int fd;
-	struct strbuf buf = STRBUF_INIT;
+	struct strbuf err = STRBUF_INIT;
+	void *transaction;
 
-	strbuf_addf(&buf, "%s\n", sha1_to_hex(commit->object.sha1));
+	transaction = ref_transaction_begin(&err);
+	if (!transaction)
+		die(_("Could not create transaction: %s"), err.buf);
 
-	filename = git_path("%s", pseudoref);
-	fd = open(filename, O_WRONLY | O_CREAT, 0666);
-	if (fd < 0)
-		die_errno(_("Could not open '%s' for writing"), filename);
-	if (write_in_full(fd, buf.buf, buf.len) != buf.len || close(fd))
-		die_errno(_("Could not write to '%s'"), filename);
-	strbuf_release(&buf);
+	if (ref_transaction_update(transaction, pseudoref, commit->object.sha1,
+				   NULL, REF_NODEREF | REF_NO_REFLOG, NULL,
+				   &err))
+		die(_("Could not write ref %s: %s"), pseudoref, err.buf);
+
+	if (ref_transaction_commit(transaction, &err))
+		die(_("Could not commit ref write %s: %s"), pseudoref, err.buf);
 }
 
 static void print_advice(int show_hint, struct replay_opts *opts)
@@ -186,7 +187,7 @@ static void print_advice(int show_hint, struct replay_opts *opts)
 		 * (typically rebase --interactive) wants to take care
 		 * of the commit itself so remove CHERRY_PICK_HEAD
 		 */
-		unlink(git_path("CHERRY_PICK_HEAD"));
+		delete_ref("CHERRY_PICK_HEAD", NULL, REF_NODEREF);
 		return;
 	}
 
@@ -877,8 +878,8 @@ static int rollback_single_pick(void)
 {
 	unsigned char head_sha1[20];
 
-	if (!file_exists(git_path("CHERRY_PICK_HEAD")) &&
-	    !file_exists(git_path("REVERT_HEAD")))
+	if (read_ref("CHERRY_PICK_HEAD", head_sha1) &&
+	    read_ref("REVERT_HEAD", head_sha1))
 		return error(_("no cherry-pick or revert in progress"));
 	if (read_ref_full("HEAD", 0, head_sha1, NULL))
 		return error(_("cannot resolve HEAD"));
@@ -1012,9 +1013,10 @@ static int pick_commits(struct commit_list *todo_list, struct replay_opts *opts)
 static int continue_single_pick(void)
 {
 	const char *argv[] = { "commit", NULL };
+	unsigned char unused[20];
 
-	if (!file_exists(git_path("CHERRY_PICK_HEAD")) &&
-	    !file_exists(git_path("REVERT_HEAD")))
+	if (read_ref("CHERRY_PICK_HEAD", unused) &&
+	    read_ref("REVERT_HEAD", unused))
 		return error(_("no cherry-pick or revert in progress"));
 	return run_command_v_opt(argv, RUN_GIT_CMD);
 }
@@ -1022,6 +1024,7 @@ static int continue_single_pick(void)
 static int sequencer_continue(struct replay_opts *opts)
 {
 	struct commit_list *todo_list = NULL;
+	unsigned char unused[20];
 
 	if (!file_exists(git_path(SEQ_TODO_FILE)))
 		return continue_single_pick();
@@ -1029,8 +1032,8 @@ static int sequencer_continue(struct replay_opts *opts)
 	read_populate_todo(&todo_list, opts);
 
 	/* Verify that the conflict has been resolved */
-	if (file_exists(git_path("CHERRY_PICK_HEAD")) ||
-	    file_exists(git_path("REVERT_HEAD"))) {
+	if (!read_ref("CHERRY_PICK_HEAD", unused) ||
+	    !read_ref("REVERT_HEAD", unused)) {
 		int ret = continue_single_pick();
 		if (ret)
 			return ret;

@@ -2297,7 +2297,7 @@ static int rename_ref_available(const char *oldname, const char *newname)
 }
 
 static int write_ref_sha1(struct ref_lock *lock, const unsigned char *sha1,
-			  const char *logmsg, struct strbuf *err);
+			  const char *logmsg, struct strbuf *err, int flags);
 
 int rename_ref(const char *oldrefname, const char *newrefname, const char *logmsg)
 {
@@ -2356,7 +2356,7 @@ int rename_ref(const char *oldrefname, const char *newrefname, const char *logms
 		goto rollback;
 	}
 	hashcpy(lock->old_sha1, orig_sha1);
-	if (write_ref_sha1(lock, orig_sha1, logmsg, &err)) {
+	if (write_ref_sha1(lock, orig_sha1, logmsg, &err, 0)) {
 		error("unable to write current sha1 into %s: %s", newrefname, err.buf);
 		strbuf_release(&err);
 		goto rollback;
@@ -2373,7 +2373,7 @@ int rename_ref(const char *oldrefname, const char *newrefname, const char *logms
 
 	flag = log_all_ref_updates;
 	log_all_ref_updates = 0;
-	if (write_ref_sha1(lock, orig_sha1, NULL, &err)) {
+	if (write_ref_sha1(lock, orig_sha1, NULL, &err, 0)) {
 		error("unable to write current sha1 into %s: %s", oldrefname, err.buf);
 		strbuf_release(&err);
 	}
@@ -2483,10 +2483,10 @@ static int log_ref_write_fd(int fd, const unsigned char *old_sha1,
 	return 0;
 }
 
-static int files_log_ref_write(const char *refname,
-			       const unsigned char *old_sha1,
-			       const unsigned char *new_sha1, const char *msg,
-			       struct strbuf *err)
+static int log_ref_write(const char *refname,
+			 const unsigned char *old_sha1,
+			 const unsigned char *new_sha1, const char *msg,
+			 struct strbuf *err)
 {
 	int logfd, result, oflags = O_APPEND | O_WRONLY;
 	char log_file[PATH_MAX];
@@ -2525,7 +2525,8 @@ static int files_log_ref_write(const char *refname,
  * return -1 on error.
  */
 static int write_ref_sha1(struct ref_lock *lock,
-	const unsigned char *sha1, const char *logmsg, struct strbuf *err)
+			  const unsigned char *sha1, const char *logmsg,
+			  struct strbuf *err, int flags)
 {
 	static char term = '\n';
 	struct object *o;
@@ -2554,9 +2555,10 @@ static int write_ref_sha1(struct ref_lock *lock,
 		return -1;
 	}
 	clear_loose_ref_cache(&ref_cache);
-	if (log_ref_write(lock->ref_name, lock->old_sha1, sha1, logmsg, err) < 0 ||
-	    (strcmp(lock->ref_name, lock->orig_ref_name) &&
-	     log_ref_write(lock->orig_ref_name, lock->old_sha1, sha1, logmsg, err) < 0)) {
+	if (!(flags & REF_NO_REFLOG) &&
+	    (log_ref_write(lock->ref_name, lock->old_sha1, sha1, logmsg, err) < 0 ||
+	     (strcmp(lock->ref_name, lock->orig_ref_name) &&
+	      log_ref_write(lock->orig_ref_name, lock->old_sha1, sha1, logmsg, err) < 0))) {
 		unlock_ref(lock);
 		return -1;
 	}
@@ -3119,7 +3121,7 @@ static int files_transaction_commit(void *trans,
 				unlock_ref(update->lock);
 				update->lock = NULL;
 			} else if (write_ref_sha1(update->lock, update->new_sha1,
-						  update->msg, err)) {
+						  update->msg, err, flags)) {
 				update->lock = NULL; /* freed by write_ref_sha1 */
 				strbuf_addf(err, "Cannot update the ref '%s'.",
 					    update->refname);

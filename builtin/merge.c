@@ -1077,6 +1077,7 @@ int cmd_merge(int argc, const char **argv, const char *prefix)
 	unsigned char result_tree[20];
 	unsigned char stash[20];
 	unsigned char head_sha1[20];
+	unsigned char unused[20];
 	struct commit *head_commit;
 	struct strbuf buf = STRBUF_INIT;
 	const char *head_arg;
@@ -1140,7 +1141,7 @@ int cmd_merge(int argc, const char **argv, const char *prefix)
 		else
 			die(_("You have not concluded your merge (MERGE_HEAD exists)."));
 	}
-	if (file_exists(git_path("CHERRY_PICK_HEAD"))) {
+	if (!read_ref("CHERRY_PICK_HEAD", unused)) {
 		if (advice_resolve_conflict)
 			die(_("You have not concluded your cherry-pick (CHERRY_PICK_HEAD exists).\n"
 			    "Please, commit your changes before you merge."));

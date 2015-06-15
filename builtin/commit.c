@@ -166,9 +166,10 @@ static int opt_parse_m(const struct option *opt, const char *arg, int unset)
 
 static void determine_whence(struct wt_status *s)
 {
+	unsigned char unused[20];
 	if (file_exists(git_path("MERGE_HEAD")))
 		whence = FROM_MERGE;
-	else if (file_exists(git_path("CHERRY_PICK_HEAD"))) {
+	else if (!read_ref("CHERRY_PICK_HEAD", unused)) {
 		whence = FROM_CHERRY_PICK;
 		if (file_exists(git_path("sequencer")))
 			sequencer_in_use = 1;
@@ -1776,8 +1777,8 @@ int cmd_commit(int argc, const char **argv, const char *prefix)
 	}
 	ref_transaction_free(transaction);
 
-	unlink(git_path("CHERRY_PICK_HEAD"));
-	unlink(git_path("REVERT_HEAD"));
+	delete_ref("CHERRY_PICK_HEAD", NULL, REF_NODEREF | REF_NO_REFLOG);
+	delete_ref("REVERT_HEAD", NULL, REF_NODEREF | REF_NO_REFLOG);
 	unlink(git_path("MERGE_HEAD"));
 	unlink(git_path("MERGE_MSG"));
 	unlink(git_path("MERGE_MODE"));

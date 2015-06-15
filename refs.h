@@ -60,6 +60,11 @@
 #define REF_BAD_NAME 0x08
 
 /*
+ * Used as a flag in ref_update::flags when the reflog should not be updated
+ */
+#define REF_NO_REFLOG	0x20
+
+/*
  * The signature for the callback function for the for_each_*()
  * functions below.  The memory pointed to by the refname and sha1
  * arguments is only guaranteed to be valid for the duration of a
