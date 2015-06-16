@@ -998,10 +998,17 @@ static char *read_line_from_git_path(const char *filename)
 static int split_commit_in_progress(struct wt_status *s)
 {
 	int split_in_progress = 0;
-	char *head = read_line_from_git_path("HEAD");
-	char *orig_head = read_line_from_git_path("ORIG_HEAD");
+	unsigned char sha1[20];
+	char *head;
+	char *orig_head;
 	char *rebase_amend = read_line_from_git_path("rebase-merge/amend");
 	char *rebase_orig_head = read_line_from_git_path("rebase-merge/orig-head");
+
+	read_ref("HEAD", sha1);
+	head = strdup(sha1_to_hex(sha1));
+
+	read_ref("ORIG_HEAD", sha1);
+	orig_head = strdup(sha1_to_hex(sha1));
 
 	if (!head || !orig_head || !rebase_amend || !rebase_orig_head ||
 	    !s->branch || strcmp(s->branch, "HEAD"))
