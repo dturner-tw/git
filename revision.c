@@ -1425,6 +1425,22 @@ static void add_pending_commit_list(struct rev_info *revs,
 	}
 }
 
+int get_sha1_from_file(const char *file, unsigned char *sha1)
+{
+	int fd;
+	char buf[40];
+
+	fd = open(git_path("%s", file), O_RDONLY);
+	if (fd < 0)
+		return -1;
+
+	if (read_in_full(fd, buf, 40) != 40)
+		return -1;
+
+	close(fd);
+	return get_sha1(buf, sha1);
+}
+
 static void prepare_show_merge(struct rev_info *revs)
 {
 	struct commit_list *bases;
