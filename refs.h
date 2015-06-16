@@ -499,6 +499,12 @@ typedef int (*for_each_reflog_fn)(each_ref_fn fn, void *cb_data);
 typedef int (*reflog_exists_fn)(const char *refname);
 typedef int (*create_reflog_fn)(const char *refname, struct strbuf *err);
 typedef int (*delete_reflog_fn)(const char *refname);
+typedef int (*reflog_expire_fn)(const char *refname, const unsigned char *sha1,
+				unsigned int flags,
+				reflog_expiry_prepare_fn prepare_fn,
+				reflog_expiry_should_prune_fn should_prune_fn,
+				reflog_expiry_cleanup_fn cleanup_fn,
+				void *policy_cb_data);
 
 /* resolution functions */
 typedef void (*ref_transaction_free_fn)(void *transaction);
@@ -556,6 +562,7 @@ struct ref_be {
 	reflog_exists_fn reflog_exists;
 	create_reflog_fn create_reflog;
 	delete_reflog_fn delete_reflog;
+	reflog_expire_fn reflog_expire;
 	resolve_ref_unsafe_fn resolve_ref_unsafe;
 	is_refname_available_fn is_refname_available;
 	pack_refs_fn pack_refs;
