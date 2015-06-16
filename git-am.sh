@@ -503,7 +503,7 @@ then
 	t,)
 		git rerere clear
 		git read-tree --reset -u HEAD HEAD
-		orig_head=$(cat "$GIT_DIR/ORIG_HEAD")
+		orig_head=$(git rev-parse ORIG_HEAD)
 		git reset HEAD
 		git update-ref ORIG_HEAD $orig_head
 		;;
