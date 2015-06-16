@@ -1452,7 +1452,7 @@ static void prepare_show_merge(struct rev_info *revs)
 	if (get_sha1("HEAD", sha1))
 		die("--merge without HEAD?");
 	head = lookup_commit_or_die(sha1, "HEAD");
-	if (get_sha1("MERGE_HEAD", sha1))
+	if (get_sha1_from_file("MERGE_HEAD", sha1))
 		die("--merge without MERGE_HEAD?");
 	other = lookup_commit_or_die(sha1, "MERGE_HEAD");
 	add_pending_object(revs, &head->object, "HEAD");
