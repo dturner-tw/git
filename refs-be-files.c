@@ -2285,21 +2285,10 @@ static int rename_tmp_log(const char *newrefname)
 	return 0;
 }
 
-static int rename_ref_available(const char *oldname, const char *newname)
-{
-	struct string_list skip = STRING_LIST_INIT_NODUP;
-	int ret;
-
-	string_list_insert(&skip, oldname);
-	ret = is_refname_available(newname, &skip);
-	string_list_clear(&skip, 0);
-	return ret;
-}
-
 static int write_ref_sha1(struct ref_lock *lock, const unsigned char *sha1,
 			  const char *logmsg, struct strbuf *err, int flags);
 
-int rename_ref(const char *oldrefname, const char *newrefname, const char *logmsg)
+static int files_rename_ref(const char *oldrefname, const char *newrefname, const char *logmsg)
 {
 	unsigned char sha1[20], orig_sha1[20];
 	int flag = 0, logmoved = 0;
@@ -3319,6 +3308,7 @@ struct ref_be refs_be_files = {
 	files_transaction_verify,
 	files_transaction_commit,
 	files_transaction_free,
+	files_rename_ref,
 	files_for_each_reflog_ent,
 	files_for_each_reflog_ent_reverse,
 	files_for_each_reflog,

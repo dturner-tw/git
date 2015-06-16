@@ -920,6 +920,11 @@ void ref_transaction_free(void *transaction)
 	return the_refs_backend->transaction_free(transaction);
 }
 
+int rename_ref(const char *oldref, const char *newref, const char *logmsg)
+{
+	return the_refs_backend->rename_ref(oldref, newref, logmsg);
+}
+
 const char *resolve_ref_unsafe(const char *ref, int resolve_flags,
 			       unsigned char *sha1, int *flags)
 {
@@ -930,6 +935,17 @@ const char *resolve_ref_unsafe(const char *ref, int resolve_flags,
 int is_refname_available(const char *refname, struct string_list *skip)
 {
 	return the_refs_backend->is_refname_available(refname, skip);
+}
+
+int rename_ref_available(const char *oldname, const char *newname)
+{
+	struct string_list skip = STRING_LIST_INIT_NODUP;
+	int ret;
+
+	string_list_insert(&skip, oldname);
+	ret = is_refname_available(newname, &skip);
+	string_list_clear(&skip, 0);
+	return ret;
 }
 
 int pack_refs(unsigned int flags)
