@@ -280,9 +280,10 @@ module_clone()
 	else
 		mkdir -p "$gitdir_base"
 		(
+			backend="--refs-backend-type=$(git config core.refs-backend-type 2>/dev/null)" || backend=""
 			clear_local_git_env
 			git clone $quiet ${depth:+"$depth"} -n ${reference:+"$reference"} \
-				--separate-git-dir "$gitdir" "$url" "$sm_path"
+				--separate-git-dir "$gitdir" "$url" "$sm_path" $backend
 		) ||
 		die "$(eval_gettext "Clone of '\$url' into submodule path '\$sm_path' failed")"
 	fi
