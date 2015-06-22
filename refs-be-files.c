@@ -14,30 +14,6 @@ struct ref_lock {
 	int lock_fd;
 };
 
-/*
- * Flag passed to lock_ref_sha1_basic() telling it to tolerate broken
- * refs (i.e., because the reference is about to be deleted anyway).
- */
-#define REF_DELETING	0x02
-
-/*
- * Used as a flag in ref_update::flags when a loose ref is being
- * pruned.
- */
-#define REF_ISPRUNING	0x04
-
-/*
- * Used as a flag in ref_update::flags when the reference should be
- * updated to new_sha1.
- */
-#define REF_HAVE_NEW	0x08
-
-/*
- * Used as a flag in ref_update::flags when old_sha1 should be
- * checked.
- */
-#define REF_HAVE_OLD	0x10
-
 struct ref_entry;
 
 /*
@@ -522,9 +498,6 @@ static void sort_ref_dir(struct ref_dir *dir)
 	}
 	dir->sorted = dir->nr = i;
 }
-
-/* Include broken references in a do_for_each_ref*() iteration: */
-#define DO_FOR_EACH_INCLUDE_BROKEN 0x01
 
 /*
  * Return true iff the reference described by entry can be resolved to
