@@ -231,10 +231,11 @@ void verify_non_filename(const char *prefix, const char *arg)
  *
  *  - either an objects/ directory _or_ the proper
  *    GIT_OBJECT_DIRECTORY environment variable
- *  - a refs/ directory
- *  - either a HEAD symlink or a HEAD file that is formatted as
- *    a proper "ref:", or a regular file HEAD that has a properly
- *    formatted sha1 object name.
+ *  - a refdb/ directory or
+ *    - a refs/ directory
+ *    - either a HEAD symlink or a HEAD file that is formatted as
+ *      a proper "ref:", or a regular file HEAD that has a properly
+ *      formatted sha1 object name.
  */
 int is_git_directory(const char *suspect)
 {
@@ -254,11 +255,15 @@ int is_git_directory(const char *suspect)
 			return 0;
 	}
 
+	strcpy(path + len, "/refdb");
+	if (!access(path, X_OK))
+		return 1;
+
 	strcpy(path + len, "/refs");
 	if (access(path, X_OK))
 		return 0;
 
-	strcpy(path + len, "/HEAD");
+	path[len] = 0;
 	if (validate_headref(path))
 		return 0;
 

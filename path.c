@@ -2,6 +2,7 @@
  * Utilities for paths and pathnames
  */
 #include "cache.h"
+#include "refs.h"
 #include "strbuf.h"
 #include "string-list.h"
 
@@ -204,13 +205,48 @@ int validate_headref(const char *path)
 	unsigned char sha1[20];
 	int fd;
 	ssize_t len;
+	struct refdb_config_data refdb_data = {NULL, NULL};
+	struct strbuf str = STRBUF_INIT;
 
-	if (lstat(path, &st) < 0)
+	if (path)
+		strbuf_addf(&str, "%s/", path);
+	strbuf_addf(&str, "%s", "config");
+
+	if (lstat(str.buf, &st) == 0) {
+		int backend_type_set;
+		if (git_config_from_file(refdb_config, str.buf, &refdb_data)) {
+			strbuf_release(&str);
+			return -1;
+		}
+
+		backend_type_set = !!refdb_data.refs_backend_type;
+		free((void *)refdb_data.refs_backend_type);
+		free((void *)refdb_data.refs_base);
+		if (backend_type_set) {
+			/*
+			 * Alternate backends are assumed to keep HEAD
+			 * in a valid state, so there's no need to do
+			 * further validation.
+			 */
+			strbuf_release(&str);
+			return 0;
+		}
+	}
+
+	strbuf_release(&str);
+	if (path)
+		strbuf_addf(&str, "%s/", path);
+	strbuf_addstr(&str, "HEAD");
+
+	if (lstat(str.buf, &st) < 0) {
+		strbuf_release(&str);
 		return -1;
+	}
 
 	/* Make sure it is a "refs/.." symlink */
 	if (S_ISLNK(st.st_mode)) {
-		len = readlink(path, buffer, sizeof(buffer)-1);
+		len = readlink(str.buf, buffer, sizeof(buffer)-1);
+		strbuf_release(&str);
 		if (len >= 5 && !memcmp("refs/", buffer, 5))
 			return 0;
 		return -1;
@@ -219,7 +255,8 @@ int validate_headref(const char *path)
 	/*
 	 * Anything else, just open it and try to see if it is a symbolic ref.
 	 */
-	fd = open(path, O_RDONLY);
+	fd = open(str.buf, O_RDONLY);
+	strbuf_release(&str);
 	if (fd < 0)
 		return -1;
 	len = read_in_full(fd, buffer, sizeof(buffer)-1);
@@ -375,7 +412,7 @@ const char *enter_repo(const char *path, int strict)
 		return NULL;
 
 	if (access("objects", X_OK) == 0 && access("refs", X_OK) == 0 &&
-	    validate_headref("HEAD") == 0) {
+	    validate_headref(NULL) == 0) {
 		set_git_dir(".");
 		check_repository_format();
 		return path;

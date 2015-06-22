@@ -17,7 +17,13 @@ struct ref_be *the_refs_backend = &refs_be_files;
  */
 struct ref_be *refs_backends = &refs_be_files;
 
-int set_refs_backend(const char *name)
+void register_refs_backend(struct ref_be *be)
+{
+	be->next = refs_backends;
+	refs_backends = be;
+}
+
+int set_refs_backend(const char *name, struct refdb_config_data *data)
 {
 	struct ref_be *be;
 
@@ -25,7 +31,7 @@ int set_refs_backend(const char *name)
 		if (!strcmp(be->name, name)) {
 			the_refs_backend = be;
 			if (be->init_backend)
-				be->init_backend();
+				be->init_backend(data);
 			return 0;
 		}
 	return 1;

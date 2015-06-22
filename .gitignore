@@ -196,6 +196,7 @@
 /test-path-utils
 /test-prio-queue
 /test-read-cache
+/test-refs-be-db
 /test-regex
 /test-revision-walking
 /test-run-command

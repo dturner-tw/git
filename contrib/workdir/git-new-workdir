@@ -28,6 +28,8 @@ git_dir=$(cd "$orig_git" 2>/dev/null &&
   git rev-parse --git-dir 2>/dev/null) ||
   die "Not a git repository: \"$orig_git\""
 
+test -d $git_dir/refdb && die "git-new-workdir is incompatible with the refs db backend"
+
 case "$git_dir" in
 .git)
 	git_dir="$orig_git/.git"

@@ -1318,8 +1318,12 @@ static int resolve_missing_loose_ref(const char *refname,
 	}
 }
 
-/* This function needs to return a meaningful errno on failure */
-static const char *files_resolve_ref_unsafe(const char *refname,
+/*
+ * Callers inside this backend need this to return a meaningful errno
+ * on failure; callers outside may not rely on errno as other backends
+ * may behave differently.
+ */
+const char *files_resolve_ref_unsafe(const char *refname,
 			int resolve_flags, unsigned char *sha1, int *flags)
 {
 	int depth = MAXDEPTH;
