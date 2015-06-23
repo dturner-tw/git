@@ -155,7 +155,7 @@ static int replace_object_sha1(const char *object_ref,
 	unsigned char prev[20];
 	enum object_type obj_type, repl_type;
 	char ref[PATH_MAX];
-	struct ref_transaction *transaction;
+	void *transaction;
 	struct strbuf err = STRBUF_INIT;
 
 	obj_type = sha1_object_info(object, NULL);

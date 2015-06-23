@@ -279,7 +279,7 @@ void create_branch(const char *head,
 		log_all_ref_updates = 1;
 
 	if (!dont_change_ref) {
-		struct ref_transaction *transaction;
+		void *transaction;
 		struct strbuf err = STRBUF_INIT;
 
 		transaction = ref_transaction_begin(&err);
@@ -302,8 +302,8 @@ void create_branch(const char *head,
 
 void remove_branch_state(void)
 {
-	unlink(git_path("CHERRY_PICK_HEAD"));
-	unlink(git_path("REVERT_HEAD"));
+	delete_ref("CHERRY_PICK_HEAD", NULL, REF_NODEREF | REF_NO_REFLOG);
+	delete_ref("REVERT_HEAD", NULL, REF_NODEREF | REF_NO_REFLOG);
 	unlink(git_path("MERGE_HEAD"));
 	unlink(git_path("MERGE_RR"));
 	unlink(git_path("MERGE_MSG"));

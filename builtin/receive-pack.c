@@ -69,7 +69,7 @@ static const char *NONCE_SLOP = "SLOP";
 static const char *nonce_status;
 static long nonce_stamp_slop;
 static unsigned long nonce_stamp_slop_limit;
-static struct ref_transaction *transaction;
+static void *transaction;
 
 static enum deny_action parse_deny_action(const char *var, const char *value)
 {

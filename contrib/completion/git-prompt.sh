@@ -411,9 +411,9 @@ __git_ps1 ()
 			fi
 		elif [ -f "$g/MERGE_HEAD" ]; then
 			r="|MERGING"
-		elif [ -f "$g/CHERRY_PICK_HEAD" ]; then
+		elif git rev-parse --quiet --verify "CHERRY_PICK_HEAD" >/dev/null; then
 			r="|CHERRY-PICKING"
-		elif [ -f "$g/REVERT_HEAD" ]; then
+		elif git rev-parse --quiet --verify "REVERT_HEAD" >/dev/null; then
 			r="|REVERTING"
 		elif [ -f "$g/BISECT_LOG" ]; then
 			r="|BISECTING"
@@ -425,8 +425,9 @@ __git_ps1 ()
 			# symlink symbolic ref
 			b="$(git symbolic-ref HEAD 2>/dev/null)"
 		else
-			local head=""
-			if ! __git_eread "$g/HEAD" head; then
+			local head
+			head="ref: $(git symbolic-ref HEAD 2>/dev/null)" || head=$(git rev-parse HEAD)
+			if [ -z "$head" ]; then
 				return $exit
 			fi
 			# is it a symbolic ref?

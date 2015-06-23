@@ -344,6 +344,7 @@ fail_pipe:
 		cmd->err = fderr[0];
 	}
 
+	total_commands_run ++;
 	trace_argv_printf(cmd->argv, "trace: run_command:");
 	fflush(NULL);
 
@@ -555,6 +556,7 @@ int finish_command(struct child_process *cmd)
 	return ret;
 }
 
+int total_commands_run = 0;
 int run_command(struct child_process *cmd)
 {
 	int code;

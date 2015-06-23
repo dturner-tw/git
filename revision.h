@@ -310,4 +310,6 @@ extern int rewrite_parents(struct rev_info *revs, struct commit *commit,
  */
 extern struct commit_list *get_saved_parents(struct rev_info *revs, const struct commit *commit);
 
+/* Read the first 40 bytes from a file, interpret as a hex-encoded SHA1. */
+int get_sha1_from_file(const char *file, unsigned char *sha1);
 #endif

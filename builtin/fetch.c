@@ -403,7 +403,7 @@ static int s_update_ref(const char *action,
 {
 	char msg[1024];
 	char *rla = getenv("GIT_REFLOG_ACTION");
-	struct ref_transaction *transaction;
+	void *transaction;
 	struct strbuf err = STRBUF_INIT;
 	int ret, df_conflict = 0;
 

@@ -10,6 +10,7 @@
 #include "exec_cmd.h"
 #include "strbuf.h"
 #include "quote.h"
+#include "refs.h"
 #include "hashmap.h"
 #include "string-list.h"
 #include "utf8.h"
@@ -1207,6 +1208,31 @@ int git_config_early(config_fn_t fn, void *data, const char *repo_config)
 	}
 
 	if (repo_config && !access_or_die(repo_config, R_OK, 0)) {
+		struct refdb_config_data refdb_data = {NULL};
+		char *repo_config_copy;
+
+		/*
+		 * make sure we always read the backend config from the
+		 * core section on startup
+		 */
+		ret += git_config_from_file(refdb_config, repo_config,
+					    &refdb_data);
+
+		repo_config_copy = xstrdup(repo_config);
+		refdb_data.refs_base = strdup(dirname(repo_config_copy));
+		free(repo_config_copy);
+
+		if (refdb_data.refs_backend_type &&
+		    !strcmp(refdb_data.refs_backend_type, "db")) {
+#ifdef USE_LIBLMDB
+			refs_backend_type = refdb_data.refs_backend_type;
+			register_refs_backend(&refs_be_db);
+			set_refs_backend(refs_backend_type, &refdb_data);
+#else
+			die("Git was not built with USE_LIBLMDB, so the db refs backend is not available");
+#endif
+		}
+
 		ret += git_config_from_file(fn, repo_config, data);
 		found += 1;
 	}

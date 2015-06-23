@@ -998,10 +998,17 @@ static char *read_line_from_git_path(const char *filename)
 static int split_commit_in_progress(struct wt_status *s)
 {
 	int split_in_progress = 0;
-	char *head = read_line_from_git_path("HEAD");
-	char *orig_head = read_line_from_git_path("ORIG_HEAD");
+	unsigned char sha1[20];
+	char *head;
+	char *orig_head;
 	char *rebase_amend = read_line_from_git_path("rebase-merge/amend");
 	char *rebase_orig_head = read_line_from_git_path("rebase-merge/orig-head");
+
+	read_ref("HEAD", sha1);
+	head = strdup(sha1_to_hex(sha1));
+
+	read_ref("ORIG_HEAD", sha1);
+	orig_head = strdup(sha1_to_hex(sha1));
 
 	if (!head || !orig_head || !rebase_amend || !rebase_orig_head ||
 	    !s->branch || strcmp(s->branch, "HEAD"))
@@ -1270,8 +1277,7 @@ void wt_status_get_state(struct wt_status_state *state,
 			state->rebase_in_progress = 1;
 		state->branch = read_and_strip_branch("rebase-merge/head-name");
 		state->onto = read_and_strip_branch("rebase-merge/onto");
-	} else if (!stat(git_path("CHERRY_PICK_HEAD"), &st) &&
-			!get_sha1("CHERRY_PICK_HEAD", sha1)) {
+	} else if (!read_ref("CHERRY_PICK_HEAD", sha1)) {
 		state->cherry_pick_in_progress = 1;
 		hashcpy(state->cherry_pick_head_sha1, sha1);
 	}
@@ -1279,8 +1285,7 @@ void wt_status_get_state(struct wt_status_state *state,
 		state->bisect_in_progress = 1;
 		state->branch = read_and_strip_branch("BISECT_START");
 	}
-	if (!stat(git_path("REVERT_HEAD"), &st) &&
-	    !get_sha1("REVERT_HEAD", sha1)) {
+	if (!read_ref("REVERT_HEAD", sha1)) {
 		state->revert_in_progress = 1;
 		hashcpy(state->revert_head_sha1, sha1);
 	}

@@ -673,6 +673,7 @@ enum object_creation_mode {
 extern enum object_creation_mode object_creation_mode;
 
 extern char *notes_ref_name;
+extern const char *refs_backend_type;
 
 extern int grafts_replace_parents;
 
@@ -1055,7 +1056,6 @@ extern int get_sha1_mb(const char *str, unsigned char *sha1);
  */
 extern int refname_match(const char *abbrev_name, const char *full_name);
 
-extern int create_symref(const char *ref, const char *refs_heads_master, const char *logmsg);
 extern int validate_headref(const char *ref);
 
 extern int base_name_compare(const char *name1, int len1, int mode1, const char *name2, int len2, int mode2);
